@@ -27,12 +27,22 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Paleta base (misma esencia que el PBI original) + semáforo para KPIs
-COLOR_OCUPADA = "#C0755F"       # terracota / rojo ladrillo
-COLOR_DISPONIBLE = "#7FA87A"    # verde salvia
-COLOR_ROJO = "#D9534F"          # crítico (>90%)
-COLOR_AMARILLO = "#E8B84B"      # atención (70-90%)
-COLOR_VERDE = "#5CB868"         # saludable (<70%)
+# Paleta profesional para tema oscuro — pensada para contraste y legibilidad
+# Ocupado/Disponible: contraste cálido/frío (más legible que rojo/verde puro,
+# y no se confunde con el semáforo de severidad de las tarjetas KPI)
+COLOR_OCUPADA = "#E8825F"       # coral / naranja tostado
+COLOR_DISPONIBLE = "#3FB8AF"    # verde azulado (teal)
+
+# Semáforo de severidad (KPIs y heatmap) — tonos suavizados, look "SaaS"
+COLOR_ROJO = "#EF5B5B"          # crítico (>90%)
+COLOR_AMARILLO = "#F2B84B"      # atención (70-90%)
+COLOR_VERDE = "#4CB782"         # saludable (<70%)
+
+# Acentos secundarios para gráficos de composición / treemap
+COLOR_ACENTO_1 = "#7C8CF8"      # violeta azulado
+COLOR_ACENTO_2 = "#3FB8AF"      # teal (mismo que disponible, para cohesión)
+COLOR_NEUTRO = "#3A3F4B"        # gris neutro de fondo para escalas
+
 COLOR_CARD_BG = "#1A1D24"
 COLOR_CARD_BORDER = "#2E323C"
 COLOR_TEXT_MUTED = "#9AA0A8"
@@ -166,12 +176,44 @@ except FileNotFoundError:
 st.sidebar.header("Filtros")
 
 pasillos = sorted(df_raw["PASILLO"].unique())
-sel_pasillos = st.sidebar.multiselect("Pasillo", pasillos, default=pasillos)
-
-localizador_q = st.sidebar.text_input("Buscar localizador")
-
 bodegas = sorted(df_raw["Bodega"].unique())
-sel_bodegas = st.sidebar.multiselect("Tipo bodega", bodegas, default=bodegas)
+
+# Búsqueda de localizador siempre visible (es la más usada / rápida)
+localizador_q = st.sidebar.text_input("🔎 Buscar localizador")
+
+# Pasillo y Bodega van dentro de un expander colapsado: arrancan sin
+# selección (= sin filtro / se muestra todo) para no saturar la vista
+# con chips. El usuario los abre solo si quiere acotar algo puntual.
+with st.sidebar.expander("📍 Pasillo y Bodega", expanded=False):
+    bp1, bp2 = st.columns(2)
+    if bp1.button("Todo", key="pasillo_todo", use_container_width=True):
+        st.session_state["sel_pasillos"] = pasillos
+    if bp2.button("Limpiar", key="pasillo_limpiar", use_container_width=True):
+        st.session_state["sel_pasillos"] = []
+    sel_pasillos = st.multiselect(
+        "Pasillo", pasillos, default=[], key="sel_pasillos",
+        placeholder="Todos (sin selección = todos)",
+    )
+
+    bb1, bb2 = st.columns(2)
+    if bb1.button("Todo", key="bodega_todo", use_container_width=True):
+        st.session_state["sel_bodegas"] = bodegas
+    if bb2.button("Limpiar", key="bodega_limpiar", use_container_width=True):
+        st.session_state["sel_bodegas"] = []
+    sel_bodegas = st.multiselect(
+        "Tipo bodega", bodegas, default=[], key="sel_bodegas",
+        placeholder="Todas (sin selección = todas)",
+    )
+
+# Sin selección = no se filtra por esa dimensión (se interpreta como "todos")
+pasillos_activos = sel_pasillos if sel_pasillos else pasillos
+bodegas_activas = sel_bodegas if sel_bodegas else bodegas
+
+# Resumen visible aunque el expander esté cerrado, para que el usuario
+# sepa qué está filtrando sin tener que abrirlo
+resumen_pasillo = "Todos" if not sel_pasillos else f"{len(sel_pasillos)} seleccionados"
+resumen_bodega = "Todas" if not sel_bodegas else f"{len(sel_bodegas)} seleccionadas"
+st.sidebar.caption(f"Pasillo: **{resumen_pasillo}** · Bodega: **{resumen_bodega}**")
 
 st.sidebar.caption(
     "💡 El filtro **Código artículo** del reporte original vive en otra "
@@ -188,7 +230,7 @@ recetario_sel = st.sidebar.radio(
 
 # Aplicar filtros
 df = df_raw[
-    df_raw["PASILLO"].isin(sel_pasillos) & df_raw["Bodega"].isin(sel_bodegas)
+    df_raw["PASILLO"].isin(pasillos_activos) & df_raw["Bodega"].isin(bodegas_activas)
 ]
 if localizador_q:
     df = df[df["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)]
@@ -427,7 +469,7 @@ with tab_bodega:
     g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
     fig_tree = px.treemap(
         g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=["#3A3F4B", COLOR_OCUPADA],
+        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_2],
     )
     fig_tree.update_layout(
         height=320, margin=dict(l=10, r=10, t=10, b=10),
@@ -488,7 +530,7 @@ with tab_composicion:
         vc = df["ALMACENAMIENTO_FLAG"].value_counts()
         fig_d1 = go.Figure(
             go.Pie(labels=vc.index, values=vc.values, hole=0.55,
-                   marker_colors=[COLOR_OCUPADA, COLOR_DISPONIBLE])
+                   marker_colors=[COLOR_ACENTO_1, COLOR_NEUTRO])
         )
         fig_d1.update_layout(
             height=260, margin=dict(l=10, r=10, t=10, b=10),
@@ -502,7 +544,7 @@ with tab_composicion:
         vc2 = df["ES_RECETARIO"].value_counts()
         fig_d2 = go.Figure(
             go.Pie(labels=vc2.index, values=vc2.values, hole=0.55,
-                   marker_colors=[COLOR_DISPONIBLE, COLOR_OCUPADA])
+                   marker_colors=[COLOR_NEUTRO, COLOR_ACENTO_2])
         )
         fig_d2.update_layout(
             height=260, margin=dict(l=10, r=10, t=10, b=10),
