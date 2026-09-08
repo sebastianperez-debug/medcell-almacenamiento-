@@ -758,74 +758,182 @@ def render_almacenamiento(
 
     st.write("")
     st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
-    piv = df.pivot_table(
-        index="NIVEL", columns="PASILLO", values="OCUPADA", aggfunc="mean"
+
+    # ----------------------------------------------------------------------
+    # Heatmap Nivel x Pasillo
+    # ----------------------------------------------------------------------
+    # Normalizamos NIVEL para evitar que valores como 1, 1.0 o "Nivel 1"
+    # terminen mezclados. La operación se fuerza a mostrar SIEMPRE los
+    # niveles 1 al 7, aunque alguno no tenga registros bajo los filtros.
+    def nivel_numero(v):
+        if pd.isna(v):
+            return None
+        txt = str(v).strip().lower().replace("nivel", "").strip()
+        try:
+            n = float(txt.replace(",", "."))
+            return int(n) if n.is_integer() else n
+        except Exception:
+            return None
+
+    df_heat = df.copy()
+    df_heat["NIVEL_NUM"] = df_heat["NIVEL"].apply(nivel_numero)
+    df_heat = df_heat[df_heat["NIVEL_NUM"].isin(range(1, 8))].copy()
+
+    niveles = list(range(1, 8))
+    pasillos_heat = sorted(
+        df_heat["PASILLO"].dropna().astype(str).unique(),
+        key=lambda x: (0, int(float(x))) if str(x).replace('.', '', 1).isdigit() else (1, str(x))
+    )
+
+    # Porcentaje por combinación nivel/pasillo.
+    piv_base = df_heat.pivot_table(
+        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="mean"
     ) * 100
-    piv = piv.reindex(sorted(piv.index, key=lambda x: int(x)))
-    piv = piv[sorted(piv.columns)]
+    piv_base = piv_base.reindex(index=niveles, columns=pasillos_heat)
 
-    nivel_totales = df.groupby("NIVEL")["OCUPADA"].mean() * 100
-    piv["Total"] = nivel_totales.reindex(piv.index)
+    # Totales por nivel y pasillo, calculados sobre los filtros activos.
+    nivel_totales = (
+        df_heat.groupby("NIVEL_NUM")["OCUPADA"].mean()
+        .mul(100).reindex(niveles)
+    )
+    pasillo_totales = (
+        df_heat.groupby("PASILLO")["OCUPADA"].mean()
+        .mul(100).reindex(pasillos_heat)
+    )
 
-    pasillo_totales = df.groupby("PASILLO")["OCUPADA"].mean() * 100
-    fila_total = pasillo_totales.reindex(piv.columns[:-1])
-    fila_total["Total"] = df["OCUPADA"].mean() * 100
+    piv = piv_base.copy()
+    piv["Total"] = nivel_totales
+    fila_total = pasillo_totales.copy()
+    fila_total["Total"] = df_heat["OCUPADA"].mean() * 100 if not df_heat.empty else None
     piv.loc["Total"] = fila_total
 
-    text_vals = piv.round(1).astype(str) + "%"
+    # Matrices auxiliares para el tooltip: ocupadas, vacías y total de
+    # ubicaciones de cada casilla. Si no existe la combinación, queda 0.
+    total_base = df_heat.pivot_table(
+        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="size"
+    ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
+    ocupadas_base = df_heat.pivot_table(
+        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="sum"
+    ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
+    vacias_base = total_base - ocupadas_base
 
-    # Matrices auxiliares para mostrar cantidades reales en el tooltip.
-    # Así la persona no tiene que convertir el porcentaje mentalmente.
-    total_m = df.pivot_table(index="NIVEL", columns="PASILLO",
-                             values="OCUPADA", aggfunc="size")
-    ocupadas_m = df.pivot_table(index="NIVEL", columns="PASILLO",
-                                values="OCUPADA", aggfunc="sum")
-    total_m = total_m.reindex(index=piv.index, columns=piv.columns[:-1]).fillna(0)
-    ocupadas_m = ocupadas_m.reindex(index=piv.index, columns=piv.columns[:-1]).fillna(0)
-    vacias_m = total_m - ocupadas_m
+    total_m = total_base.copy()
+    ocupadas_m = ocupadas_base.copy()
+    vacias_m = vacias_base.copy()
+
     total_m["Total"] = total_m.sum(axis=1)
     ocupadas_m["Total"] = ocupadas_m.sum(axis=1)
     vacias_m["Total"] = vacias_m.sum(axis=1)
+
     total_m.loc["Total"] = total_m.sum(axis=0)
     ocupadas_m.loc["Total"] = ocupadas_m.sum(axis=0)
     vacias_m.loc["Total"] = vacias_m.sum(axis=0)
+
+    text_vals = piv.applymap(
+        lambda x: "" if pd.isna(x) else f"{x:.1f}%"
+    )
+
     customdata = []
     for r in piv.index:
         row = []
         for c in piv.columns:
-            row.append([int(ocupadas_m.loc[r, c]), int(vacias_m.loc[r, c]), int(total_m.loc[r, c])])
+            row.append([
+                int(ocupadas_m.loc[r, c]),
+                int(vacias_m.loc[r, c]),
+                int(total_m.loc[r, c]),
+            ])
         customdata.append(row)
 
     fig_heat = go.Figure(
         data=go.Heatmap(
-            z=piv.values, x=piv.columns, y=piv.index, customdata=customdata,
-            colorscale=[[0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1, COLOR_ROJO]],
-            text=text_vals.values, texttemplate="%{text}",
-            textfont=dict(family=PLOTLY_FONT_FAMILY, size=11, color="#0B1220"),
-            showscale=True, xgap=3, ygap=3,
+            z=piv.values,
+            x=[str(c) for c in piv.columns],
+            y=[str(r) for r in piv.index],
+            customdata=customdata,
+            colorscale=[
+                [0.00, COLOR_VERDE],
+                [0.50, COLOR_AMARILLO],
+                [1.00, COLOR_ROJO],
+            ],
+            zmin=0,
+            zmax=100,
+            text=text_vals.values,
+            texttemplate="%{text}",
+            textfont=dict(
+                family=PLOTLY_FONT_FAMILY,
+                size=11,
+                color="#0B1220",
+            ),
+            hoverongaps=False,
+            showscale=True,
+            xgap=3,
+            ygap=3,
             colorbar=dict(
-                title=dict(text="%", font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0")),
-                tickfont=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
+                title=dict(
+                    text="%",
+                    font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
+                ),
+                tickfont=dict(
+                    family=PLOTLY_FONT_FAMILY,
+                    color="#E2E8F0",
+                ),
                 outlinewidth=0,
+                len=0.82,
             ),
             hovertemplate=(
                 "<b>Nivel %{y} · Pasillo %{x}</b><br>"
                 "Ocupación: %{z:.1f}%<br>"
-                "Posiciones ocupadas: %{customdata[0]:,.0f}<br>"
-                "Posiciones vacías: %{customdata[1]:,.0f}<br>"
-                "Posiciones totales: %{customdata[2]:,.0f}<extra></extra>"
+                "Ubicaciones ocupadas: %{customdata[0]:,.0f}<br>"
+                "Ubicaciones vacías: %{customdata[1]:,.0f}<br>"
+                "Ubicaciones totales: %{customdata[2]:,.0f}"
+                "<extra></extra>"
             ),
         )
     )
+
     fig_heat.update_layout(
         **BASE_LAYOUT,
-        height=380, margin=dict(l=10, r=10, t=10, b=10),
-        yaxis=dict(autorange="reversed", title="Nivel", showgrid=False),
-        xaxis=dict(title="Pasillo", side="top", showgrid=False),
+        height=470,
+        margin=dict(l=72, r=100, t=55, b=90),
+        xaxis=dict(
+            title=dict(
+                text="Pasillo",
+                font=dict(size=12, color="#E2E8F0"),
+            ),
+            side="bottom",
+            tickmode="array",
+            tickvals=[str(c) for c in piv.columns],
+            ticktext=[str(c) for c in piv.columns],
+            tickangle=-45,
+            tickfont=dict(size=11, color="#E2E8F0"),
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+        ),
+        yaxis=dict(
+            title=dict(
+                text="Nivel",
+                font=dict(size=12, color="#E2E8F0"),
+            ),
+            tickmode="array",
+            tickvals=[str(r) for r in piv.index],
+            ticktext=[str(r) for r in piv.index],
+            tickfont=dict(size=11, color="#E2E8F0"),
+            autorange="reversed",
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+        ),
     )
+
     st.plotly_chart(
-        fig_heat, use_container_width=True,
-        config={"displayModeBar": True, "responsive": True, "scrollZoom": False},
+        fig_heat,
+        use_container_width=True,
+        config={
+            "displayModeBar": False,
+            "responsive": True,
+            "scrollZoom": False,
+        },
         theme=None,
     )
 
