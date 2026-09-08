@@ -251,9 +251,28 @@ ocupadas = int(df["OCUPADA"].sum())
 disponibles = int((~df["OCUPADA"]).sum())
 pct_ocupacion = round(ocupadas / total_localizadores * 100, 1)
 
-# Pasillo más saturado / con más espacio
+# Pasillo más saturado / con más espacio REAL: las posiciones reservadas
+# para RECETARIO se cuentan como no disponibles aunque VACIAS>0, y este
+# cálculo ignora el filtro de la barra lateral "Es Recetario" a propósito
+# (si no, esas posiciones quedan fuera del cálculo y el pasillo parece
+# tener más espacio libre del que realmente tiene). Sí respeta
+# Pasillo/Bodega/búsqueda de localizador.
+df_espacio_real = df_raw[
+    df_raw["PASILLO"].isin(pasillos_activos)
+    & df_raw["Bodega"].isin(bodegas_activas)
+]
+if localizador_q:
+    df_espacio_real = df_espacio_real[
+        df_espacio_real["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)
+    ]
+df_espacio_real = df_espacio_real.copy()
+df_espacio_real["OCUPADA_REAL"] = (
+    df_espacio_real["OCUPADA"] | (df_espacio_real["ES_RECETARIO"] == "Sí")
+)
+
 por_pasillo_pct = (
-    df.groupby("PASILLO")["OCUPADA"].mean().mul(100).round(1).sort_values()
+    df_espacio_real.groupby("PASILLO")["OCUPADA_REAL"]
+    .mean().mul(100).round(1).sort_values()
 )
 pasillo_mas_libre = por_pasillo_pct.index[0]
 pasillo_mas_saturado = por_pasillo_pct.index[-1]
@@ -326,6 +345,14 @@ kpi_card(
     semaforo_color(por_pasillo_pct.iloc[0]),
 )
 
+st.caption(
+    "ℹ️ *Pasillo más saturado/con más espacio* cuentan las posiciones "
+    "reservadas para **RECETARIO** como no disponibles, aunque figuren "
+    "vacías — por eso pueden no coincidir exactamente con el % de "
+    "Ocupación general de arriba (que sí depende del filtro Recetario "
+    "de la barra lateral)."
+)
+
 st.write("")
 
 # Botón de descarga del reporte filtrado
@@ -375,8 +402,8 @@ with st.expander("📭 Ver y descargar solo ubicaciones vacías", expanded=False
 st.write("")
 
 
-tab_resumen, tab_bodega, tab_pasillo_nivel, tab_composicion = st.tabs(
-    ["📊 Resumen general", "🏬 Por bodega", "🧭 Pasillo y nivel", "🧩 Composición"]
+tab_resumen, tab_bodega, tab_pasillo_nivel = st.tabs(
+    ["📊 Resumen general", "🏬 Por bodega", "🧭 Pasillo y nivel"]
 )
 
 # ---------------- TAB 1: Resumen general ----------------
@@ -440,6 +467,10 @@ with tab_resumen:
         font=dict(color="#E6E6E6"),
     )
     st.plotly_chart(fig_pas, use_container_width=True)
+
+    st.write("")
+    st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
+    st.dataframe(df, use_container_width=True, height=320)
 
 # ---------------- TAB 2: Por bodega ----------------
 with tab_bodega:
@@ -553,44 +584,3 @@ with tab_pasillo_nivel:
         "Ubicaciones totales, según los filtros activos."
     )
 
-# ---------------- TAB 4: Composición ----------------
-with tab_composicion:
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown('<p class="section-title">Almacenamiento</p>', unsafe_allow_html=True)
-        vc = df["ALMACENAMIENTO_FLAG"].value_counts()
-        fig_d1 = go.Figure(
-            go.Pie(labels=vc.index, values=vc.values, hole=0.55,
-                   marker_colors=[COLOR_ACENTO_1, COLOR_NEUTRO])
-        )
-        fig_d1.update_layout(
-            height=260, margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#E6E6E6"),
-            showlegend=True, legend=dict(orientation="h", y=-0.1),
-        )
-        st.plotly_chart(fig_d1, use_container_width=True)
-
-    with c2:
-        st.markdown('<p class="section-title">Es Recetario</p>', unsafe_allow_html=True)
-        vc2 = df["ES_RECETARIO"].value_counts()
-        fig_d2 = go.Figure(
-            go.Pie(labels=vc2.index, values=vc2.values, hole=0.55,
-                   marker_colors=[COLOR_NEUTRO, COLOR_ACENTO_2])
-        )
-        fig_d2.update_layout(
-            height=260, margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#E6E6E6"),
-            showlegend=True, legend=dict(orientation="h", y=-0.1),
-        )
-        st.plotly_chart(fig_d2, use_container_width=True)
-
-    with c3:
-        st.markdown('<p class="section-title">Otras observaciones</p>', unsafe_allow_html=True)
-        kpi_card(
-            st, int(otras_obs), "Ubicaciones con observación distinta de recetario/vacío"
-        )
-
-    st.write("")
-    st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, height=320)
