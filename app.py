@@ -15,6 +15,7 @@ from datetime import date
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.colors import sample_colorscale
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -28,25 +29,28 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Paleta profesional para tema oscuro — pensada para contraste y legibilidad
-# Ocupado/Disponible: contraste cálido/frío (más legible que rojo/verde puro,
-# y no se confunde con el semáforo de severidad de las tarjetas KPI)
-COLOR_OCUPADA = "#E8825F"       # coral / naranja tostado
-COLOR_DISPONIBLE = "#3FB8AF"    # verde azulado (teal)
+# Paleta profesional para tema oscuro — índigo/teal, look "SaaS" moderno,
+# más desaturada que naranja/verde-azulado puro (evita el aire "años 2010").
+# Ocupado/Disponible: contraste frío/frío-cálido, cohesivo con el resto
+# de la app (no se confunde con el semáforo de severidad de las tarjetas KPI).
+COLOR_OCUPADA = "#6366F1"       # índigo (marca principal)
+COLOR_DISPONIBLE = "#2DD4BF"    # teal / menta
 
-# Semáforo de severidad (KPIs y heatmap) — tonos suavizados, look "SaaS"
-COLOR_ROJO = "#EF5B5B"          # crítico (>90%)
-COLOR_AMARILLO = "#F2B84B"      # atención (70-90%)
-COLOR_VERDE = "#4CB782"         # saludable (<70%)
+# Semáforo de severidad (KPIs y heatmap) — tonos "flat design" suavizados
+COLOR_ROJO = "#FB7185"          # crítico (>90%)
+COLOR_AMARILLO = "#FBBF24"      # atención (70-90%)
+COLOR_VERDE = "#34D399"         # saludable (<70%)
 
 # Acentos secundarios para gráficos de composición / treemap
-COLOR_ACENTO_1 = "#7C8CF8"      # violeta azulado
-COLOR_ACENTO_2 = "#3FB8AF"      # teal (mismo que disponible, para cohesión)
-COLOR_NEUTRO = "#3A3F4B"        # gris neutro de fondo para escalas
+COLOR_ACENTO_1 = "#818CF8"      # índigo claro
+COLOR_ACENTO_2 = "#2DD4BF"      # teal (mismo que disponible, para cohesión)
+COLOR_NEUTRO = "#334155"        # slate oscuro de fondo para escalas
 
-COLOR_CARD_BG = "#1A1D24"
-COLOR_CARD_BORDER = "#2E323C"
-COLOR_TEXT_MUTED = "#9AA0A8"
+COLOR_CARD_BG = "#161B2C"
+COLOR_CARD_BORDER = "#2A2F45"
+COLOR_TEXT_MUTED = "#94A3B8"
+COLOR_GRID = "rgba(148, 163, 184, 0.12)"   # grilla sutil, casi invisible
+PLOTLY_FONT_FAMILY = "Inter, -apple-system, Segoe UI, sans-serif"
 
 DATA_PATH = "data/Almacenamiento_2026.xlsx"
 
@@ -520,30 +524,44 @@ def render_almacenamiento(
     # Todo el contenido en una sola vista (sin tabs), en orden lógico:
     # resumen -> por pasillo -> por bodega -> nivel/pasillo -> detalle
     # ----------------------------------------------------------------------
+    BASE_LAYOUT = dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0", size=12),
+        hoverlabel=dict(
+            bgcolor=COLOR_CARD_BG, bordercolor=COLOR_CARD_BORDER,
+            font=dict(family=PLOTLY_FONT_FAMILY, color="#F1F5F9"),
+        ),
+    )
+
     st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
     fig_total = go.Figure()
     fig_total.add_trace(
         go.Bar(
             x=[ocupadas], y=["Ubicaciones"], orientation="h",
-            name="Ocupadas", marker_color=COLOR_OCUPADA,
+            name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
             text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
+            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
+            hovertemplate="Ocupadas: %{x:,.0f}<extra></extra>",
         )
     )
     fig_total.add_trace(
         go.Bar(
             x=[disponibles], y=["Ubicaciones"], orientation="h",
-            name="Disponibles", marker_color=COLOR_DISPONIBLE,
+            name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
             text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
+            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
+            hovertemplate="Disponibles: %{x:,.0f}<extra></extra>",
         )
     )
     fig_total.update_layout(
-        barmode="stack", height=110,
+        **BASE_LAYOUT,
+        barmode="stack", height=110, bargap=0.55,
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, x=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.15, x=0,
+                     bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(visible=False), yaxis=dict(visible=False),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E6E6E6"),
     )
     st.plotly_chart(fig_total, use_container_width=True)
 
@@ -558,25 +576,33 @@ def render_almacenamiento(
     fig_pas = go.Figure()
     fig_pas.add_trace(
         go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
-               marker_color=COLOR_OCUPADA, text=gp["ocupadas"], textposition="inside")
+               marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
+               text=gp["ocupadas"], textposition="inside",
+               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
+               hovertemplate="Pasillo %{x}<br>Ocupadas: %{y:,.0f}<extra></extra>")
     )
     fig_pas.add_trace(
         go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
-               marker_color=COLOR_DISPONIBLE,
-               text=gp["disponibles"].replace(0, ""), textposition="inside")
+               marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
+               text=gp["disponibles"].replace(0, ""), textposition="inside",
+               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
+               hovertemplate="Pasillo %{x}<br>Disponibles: %{y:,.0f}<extra></extra>")
     )
     for pasillo, row in gp.iterrows():
         fig_pas.add_annotation(
             x=pasillo, y=row["total"], text=f"{int(row['total'])}",
-            showarrow=False, yshift=12, font=dict(size=11, color="#E6E6E6"),
+            showarrow=False, yshift=14,
+            font=dict(size=11, color=COLOR_TEXT_MUTED, family=PLOTLY_FONT_FAMILY),
         )
     fig_pas.update_layout(
-        barmode="stack", height=380,
+        **BASE_LAYOUT,
+        barmode="stack", height=380, bargap=0.32,
         margin=dict(l=10, r=10, t=30, b=10),
-        xaxis_title="Pasillo", yaxis_title="Ubicaciones",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E6E6E6"),
+        xaxis=dict(title="Pasillo", showgrid=False, linecolor=COLOR_GRID),
+        yaxis=dict(title="Ubicaciones", showgrid=True, gridcolor=COLOR_GRID,
+                    zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                     bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig_pas, use_container_width=True)
 
@@ -591,19 +617,32 @@ def render_almacenamiento(
             .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
             .sort_values("pct")
         )
-        colores_bodega = [semaforo_color(v) for v in g["pct"]]
+        # Degradado continuo verde→ámbar→rojo (en vez de 3 bloques fijos):
+        # con esto, valores parecidos (ej. 74%-89%, todos "Atención") se
+        # siguen viendo diferenciados entre sí en vez de un bloque plano
+        # del mismo color, que es lo que se veía anticuado.
+        colores_bodega = sample_colorscale(
+            [[0.0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1.0, COLOR_ROJO]],
+            [min(max(v / 100, 0), 1) for v in g["pct"]],
+        )
         fig_pct = go.Figure(
             go.Bar(
                 x=g["pct"], y=g.index, orientation="h",
-                marker_color=colores_bodega,
+                marker=dict(
+                    color=colores_bodega, line=dict(width=0),
+                    opacity=0.92,
+                ),
                 text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
+                textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY, size=13),
+                hovertemplate="%{y}: %{x:.0f}%<extra></extra>",
             )
         )
         fig_pct.update_layout(
-            height=280, margin=dict(l=10, r=40, t=10, b=10),
-            xaxis=dict(visible=False),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#E6E6E6"),
+            **BASE_LAYOUT,
+            height=280, bargap=0.5,
+            margin=dict(l=10, r=40, t=10, b=10),
+            xaxis=dict(visible=False, range=[0, max(g["pct"].max() * 1.15, 10)]),
+            yaxis=dict(showgrid=False, tickfont=dict(size=12)),
         )
         st.plotly_chart(fig_pct, use_container_width=True)
 
@@ -617,21 +656,26 @@ def render_almacenamiento(
         fig_bd = go.Figure()
         fig_bd.add_trace(
             go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
-                   name="Ocupadas", marker_color=COLOR_OCUPADA,
-                   text=g2["ocupadas"], textposition="outside")
+                   name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
+                   text=g2["ocupadas"], textposition="outside",
+                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
+                   hovertemplate="%{y} — Ocupadas: %{x:,.0f}<extra></extra>")
         )
         fig_bd.add_trace(
             go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
-                   name="Disponibles", marker_color=COLOR_DISPONIBLE,
-                   text=g2["disponibles"], textposition="outside")
+                   name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
+                   text=g2["disponibles"], textposition="outside",
+                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
+                   hovertemplate="%{y} — Disponibles: %{x:,.0f}<extra></extra>")
         )
         fig_bd.update_layout(
-            barmode="group", height=280,
+            **BASE_LAYOUT,
+            barmode="group", height=280, bargap=0.3, bargroupgap=0.12,
             margin=dict(l=10, r=10, t=10, b=10),
             xaxis=dict(visible=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#E6E6E6"),
+            yaxis=dict(showgrid=False),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                         bgcolor="rgba(0,0,0,0)"),
         )
         st.plotly_chart(fig_bd, use_container_width=True)
 
@@ -639,11 +683,17 @@ def render_almacenamiento(
     g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
     fig_tree = px.treemap(
         g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_2],
+        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
+    )
+    fig_tree.update_traces(
+        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
+        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
+        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
     )
     fig_tree.update_layout(
         height=320, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#E6E6E6"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
         coloraxis_showscale=False,
     )
     st.plotly_chart(fig_tree, use_container_width=True)
@@ -671,16 +721,21 @@ def render_almacenamiento(
             z=piv.values, x=piv.columns, y=piv.index,
             colorscale=[[0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1, COLOR_ROJO]],
             text=text_vals.values, texttemplate="%{text}",
-            showscale=True, xgap=2, ygap=2,
-            colorbar=dict(title="%", tickfont=dict(color="#E6E6E6")),
+            textfont=dict(family=PLOTLY_FONT_FAMILY, size=11, color="#0B1220"),
+            showscale=True, xgap=3, ygap=3,
+            colorbar=dict(
+                title=dict(text="%", font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0")),
+                tickfont=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
+                outlinewidth=0,
+            ),
+            hovertemplate="Nivel %{y} · Pasillo %{x}<br>%{z:.1f}%<extra></extra>",
         )
     )
     fig_heat.update_layout(
+        **BASE_LAYOUT,
         height=380, margin=dict(l=10, r=10, t=10, b=10),
-        yaxis=dict(autorange="reversed", title="Nivel"),
-        xaxis=dict(title="Pasillo", side="top"),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E6E6E6"),
+        yaxis=dict(autorange="reversed", title="Nivel", showgrid=False),
+        xaxis=dict(title="Pasillo", side="top", showgrid=False),
     )
     st.plotly_chart(fig_heat, use_container_width=True)
 
