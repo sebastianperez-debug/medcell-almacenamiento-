@@ -153,14 +153,35 @@ def load_data(file) -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Cargando datos de stock...")
 def load_stock_data(file) -> pd.DataFrame:
-    """Carga la hoja STOCK (fecha de caducidad) del mismo Excel.
+    """Carga la hoja de detalle de STOCK (fecha de caducidad) del mismo Excel.
+
+    El archivo puede traer la data en una hoja llamada 'STOCK' o
+    'STOCK EN POSICION' (según cómo se haya pegado). Se prioriza
+    'STOCK EN POSICION' porque es la que trae el detalle completo de
+    lote/localizador/fecha de expiración; si no existe, se cae a 'STOCK'.
 
     Se lee con dtype=str (igual que en el dashboard original de Medcell
     Operaciones) porque los códigos de artículo/SKU vienen con ceros a
     la izquierda o formatos tipo '0007341.7' que se rompen si Excel/pandas
     los infiere como número.
     """
-    df = pd.read_excel(file, sheet_name="STOCK", dtype=str)
+    posibles_nombres = ["STOCK EN POSICION", "STOCK"]
+    xls = pd.ExcelFile(file)
+    nombre_encontrado = next(
+        (n for n in posibles_nombres if n in xls.sheet_names), None
+    )
+    if nombre_encontrado is None:
+        nombre_encontrado = next(
+            (n for n in xls.sheet_names if "stock" in n.strip().lower()), None
+        )
+    if nombre_encontrado is None:
+        raise ValueError(
+            "No encontré ninguna hoja de STOCK (probé 'STOCK EN POSICION', "
+            "'STOCK' y cualquier hoja que contenga 'stock' en el nombre). "
+            f"Hojas disponibles en el archivo: {xls.sheet_names}"
+        )
+
+    df = pd.read_excel(xls, sheet_name=nombre_encontrado, dtype=str)
     df.columns = [str(c).strip() for c in df.columns]
     df = df.loc[:, ~df.columns.str.startswith("Unnamed")]
     df = df.loc[:, ~df.columns.duplicated()]
@@ -682,6 +703,10 @@ def render_stock(df_stock_raw):
     """
     df = df_stock_raw.copy()
 
+    with st.expander("🔧 Diagnóstico de columnas (temporal, quitar después)", expanded=False):
+        st.write("Columnas detectadas en la hoja STOCK:", list(df.columns))
+        st.dataframe(df.head(5), use_container_width=True)
+
     st.markdown("### 📦 Dashboard de Fecha de Caducidad")
 
     col_cod = next(
@@ -694,11 +719,12 @@ def render_stock(df_stock_raw):
         None,
     )
     col_estado_sub = next(
+        (c for c in df.columns if c.strip().lower() == "estado_subin"), None
+    ) or next(
         (
             c
             for c in df.columns
-            if c.strip().lower()
-            in ["estado_subin", "sub_inventario", "estado sub inventario"]
+            if c.strip().lower() in ["sub_inventario", "estado sub inventario"]
         ),
         None,
     )
