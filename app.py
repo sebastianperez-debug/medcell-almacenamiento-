@@ -566,98 +566,6 @@ def render_almacenamiento(
         ),
     )
 
-    # =========================================================================
-    # SECCIÓN DE LA IMAGEN 2 (AHORA ARRIBA): BODEGAS, TREEMAP Y HEATMAP
-    # =========================================================================
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.markdown('<p class="section-title">% Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
-        g = (
-            df.groupby("Bodega")
-            .agg(total=("LOCALIZADOR", "count"), ocupadas=("OCUPADA", "sum"))
-            .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
-            .sort_values("pct")
-        )
-        colores_bodega = sample_colorscale(
-            [[0.0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1.0, COLOR_ROJO]],
-            [min(max(v / 100, 0), 1) for v in g["pct"]],
-        )
-        fig_pct = go.Figure(
-            go.Bar(
-                x=g["pct"], y=g.index, orientation="h",
-                marker=dict(
-                    color=colores_bodega, line=dict(width=0),
-                    opacity=0.92,
-                ),
-                text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
-                textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY, size=13),
-                hovertemplate="%{y}: %{x:.0f}%<extra></extra>",
-            )
-        )
-        fig_pct.update_layout(
-            **BASE_LAYOUT,
-            height=280, bargap=0.5,
-            margin=dict(l=10, r=40, t=10, b=10),
-            xaxis=dict(visible=False, range=[0, max(g["pct"].max() * 1.15, 10)]),
-            yaxis=dict(showgrid=False, tickfont=dict(size=12)),
-        )
-        st.plotly_chart(fig_pct, use_container_width=True)
-
-    with c2:
-        st.markdown('<p class="section-title">Ocupadas vs. disponibles por bodega</p>', unsafe_allow_html=True)
-        g2 = (
-            df.groupby("Bodega")
-            .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-            .sort_values("ocupadas")
-        )
-        fig_bd = go.Figure()
-        fig_bd.add_trace(
-            go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
-                   name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-                   text=g2["ocupadas"], textposition="outside",
-                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
-                   hovertemplate="%{y} — Ocupadas: %{x:,.0f}<extra></extra>")
-        )
-        fig_bd.add_trace(
-            go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
-                   name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-                   text=g2["disponibles"], textposition="outside",
-                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
-                   hovertemplate="%{y} — Disponibles: %{x:,.0f}<extra></extra>")
-        )
-        fig_bd.update_layout(
-            **BASE_LAYOUT,
-            barmode="group", height=280, bargap=0.3, bargroupgap=0.12,
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis=dict(visible=False),
-            yaxis=dict(showgrid=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                         bgcolor="rgba(0,0,0,0)"),
-        )
-        st.plotly_chart(fig_bd, use_container_width=True)
-
-    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
-    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
-    fig_tree = px.treemap(
-        g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
-    )
-    fig_tree.update_traces(
-        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
-        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
-        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
-        root_color="rgba(0,0,0,0)",
-    )
-    fig_tree.update_layout(
-        height=320, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig_tree, use_container_width=True)
-
-    st.write("")
     st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
 
     def nivel_numero(v):
@@ -826,6 +734,184 @@ def render_almacenamiento(
 
     st.write("")
 
+
+
+    # Datos base para las tarjetas por pasillo (antes de los gráficos posteriores).
+    gp_cards = (
+        df.groupby("PASILLO")
+        .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
+        .reindex(sorted(df["PASILLO"].astype(str).str.strip().unique()))
+    )
+    gp_cards.index = gp_cards.index.astype(str).str.strip()
+
+    st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
+
+    def pasillo_card(col, pasillo, vacias, ocupadas):
+        if str(pasillo) in ("A", "B"):
+            sub = df[df["PASILLO"].astype(str).str.strip() == str(pasillo)].copy()
+            if "Bodega" in sub.columns:
+                detalle = (
+                    sub.groupby("Bodega", dropna=False)
+                    .agg(
+                        vacias=("VACIAS", "sum"),
+                        ocupadas=("OCUPADA", "sum"),
+                    )
+                    .reset_index()
+                )
+                detalle["Bodega"] = detalle["Bodega"].fillna("SIN CATEGORÍA").astype(str)
+                detalle = detalle.sort_values("Bodega")
+            else:
+                detalle = pd.DataFrame(columns=["Bodega", "vacias", "ocupadas"])
+
+            nombres = {
+                "COSMETICO": "COSMÉTICO",
+                "DISP.MEDICOS": "DISP. MÉDICOS",
+                "INFLAMABLE": "INFLAMABLE",
+                "ALIMENTO": "ALIMENTO",
+                "ALTILLO": "ALTILLO",
+            }
+
+            filas = ""
+            for _, r in detalle.iterrows():
+                categoria = nombres.get(str(r["Bodega"]).strip(), str(r["Bodega"]).strip())
+                filas += (
+                    f'<div class="pasillo-cat-row">'
+                    f'<span class="pasillo-cat-name">{categoria}</span>'
+                    f'<span class="pasillo-cat-empty">{int(r["vacias"]):,}</span>'
+                    f'<span class="pasillo-cat-occupied">{int(r["ocupadas"]):,}</span>'
+                    f'</div>'
+                ).replace(",", ".")
+
+            col.markdown(
+                f'<div class="pasillo-card pasillo-card-detalle">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-cat-head">'
+                f'<span></span><span>VACÍAS</span><span>OCUPADAS</span>'
+                f'</div>'
+                f'{filas}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            col.markdown(
+                f'<div class="pasillo-card">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-stats">'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
+                f'<p>VACÍAS</p></div>'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
+                f'<p>OCUPADAS</p></div>'
+                f'</div></div>'.replace(",", "."),
+                unsafe_allow_html=True,
+            )
+
+    TARJETAS_POR_FILA = 7
+    pasillos_lista = list(gp_cards.index)
+    for i in range(0, len(pasillos_lista), TARJETAS_POR_FILA):
+        fila = pasillos_lista[i:i + TARJETAS_POR_FILA]
+        cols_fila = st.columns(TARJETAS_POR_FILA)
+        for col, pasillo in zip(cols_fila, fila):
+            pasillo_card(
+                col, pasillo,
+                int(gp_cards.loc[pasillo, "disponibles"]),
+                int(gp_cards.loc[pasillo, "ocupadas"]),
+            )
+
+    st.write("")
+
+
+    # =========================================================================
+    # SECCIÓN DE LA IMAGEN 2 (AHORA ARRIBA): BODEGAS, TREEMAP Y HEATMAP
+    # =========================================================================
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown('<p class="section-title">% Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
+        g = (
+            df.groupby("Bodega")
+            .agg(total=("LOCALIZADOR", "count"), ocupadas=("OCUPADA", "sum"))
+            .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
+            .sort_values("pct")
+        )
+        colores_bodega = sample_colorscale(
+            [[0.0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1.0, COLOR_ROJO]],
+            [min(max(v / 100, 0), 1) for v in g["pct"]],
+        )
+        fig_pct = go.Figure(
+            go.Bar(
+                x=g["pct"], y=g.index, orientation="h",
+                marker=dict(
+                    color=colores_bodega, line=dict(width=0),
+                    opacity=0.92,
+                ),
+                text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
+                textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY, size=13),
+                hovertemplate="%{y}: %{x:.0f}%<extra></extra>",
+            )
+        )
+        fig_pct.update_layout(
+            **BASE_LAYOUT,
+            height=280, bargap=0.5,
+            margin=dict(l=10, r=40, t=10, b=10),
+            xaxis=dict(visible=False, range=[0, max(g["pct"].max() * 1.15, 10)]),
+            yaxis=dict(showgrid=False, tickfont=dict(size=12)),
+        )
+        st.plotly_chart(fig_pct, use_container_width=True)
+
+    with c2:
+        st.markdown('<p class="section-title">Ocupadas vs. disponibles por bodega</p>', unsafe_allow_html=True)
+        g2 = (
+            df.groupby("Bodega")
+            .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
+            .sort_values("ocupadas")
+        )
+        fig_bd = go.Figure()
+        fig_bd.add_trace(
+            go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
+                   name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
+                   text=g2["ocupadas"], textposition="outside",
+                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
+                   hovertemplate="%{y} — Ocupadas: %{x:,.0f}<extra></extra>")
+        )
+        fig_bd.add_trace(
+            go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
+                   name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
+                   text=g2["disponibles"], textposition="outside",
+                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
+                   hovertemplate="%{y} — Disponibles: %{x:,.0f}<extra></extra>")
+        )
+        fig_bd.update_layout(
+            **BASE_LAYOUT,
+            barmode="group", height=280, bargap=0.3, bargroupgap=0.12,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(visible=False),
+            yaxis=dict(showgrid=False),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                         bgcolor="rgba(0,0,0,0)"),
+        )
+        st.plotly_chart(fig_bd, use_container_width=True)
+
+    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
+    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
+    fig_tree = px.treemap(
+        g3, path=["Bodega"], values="cantidad",
+        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
+    )
+    fig_tree.update_traces(
+        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
+        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
+        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
+        root_color="rgba(0,0,0,0)",
+    )
+    fig_tree.update_layout(
+        height=320, margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig_tree, use_container_width=True)
+
+    st.write("")
     # =========================================================================
     # SECCIÓN DE LA IMAGEN 1 (AHORA ABAJO): RESUMEN TOTAL Y POR PASILLO
     # =========================================================================
@@ -901,80 +987,6 @@ def render_almacenamiento(
     )
     st.plotly_chart(fig_pas, use_container_width=True)
 
-    st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
-
-    def pasillo_card(col, pasillo, vacias, ocupadas):
-        if str(pasillo) in ("A", "B"):
-            sub = df[df["PASILLO"].astype(str).str.strip() == str(pasillo)].copy()
-            if "Bodega" in sub.columns:
-                detalle = (
-                    sub.groupby("Bodega", dropna=False)
-                    .agg(
-                        vacias=("VACIAS", "sum"),
-                        ocupadas=("OCUPADA", "sum"),
-                    )
-                    .reset_index()
-                )
-                detalle["Bodega"] = detalle["Bodega"].fillna("SIN CATEGORÍA").astype(str)
-                detalle = detalle.sort_values("Bodega")
-            else:
-                detalle = pd.DataFrame(columns=["Bodega", "vacias", "ocupadas"])
-
-            nombres = {
-                "COSMETICO": "COSMÉTICO",
-                "DISP.MEDICOS": "DISP. MÉDICOS",
-                "INFLAMABLE": "INFLAMABLE",
-                "ALIMENTO": "ALIMENTO",
-                "ALTILLO": "ALTILLO",
-            }
-
-            filas = ""
-            for _, r in detalle.iterrows():
-                categoria = nombres.get(str(r["Bodega"]).strip(), str(r["Bodega"]).strip())
-                filas += (
-                    f'<div class="pasillo-cat-row">'
-                    f'<span class="pasillo-cat-name">{categoria}</span>'
-                    f'<span class="pasillo-cat-empty">{int(r["vacias"]):,}</span>'
-                    f'<span class="pasillo-cat-occupied">{int(r["ocupadas"]):,}</span>'
-                    f'</div>'
-                ).replace(",", ".")
-
-            col.markdown(
-                f'<div class="pasillo-card pasillo-card-detalle">'
-                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
-                f'<div class="pasillo-cat-head">'
-                f'<span></span><span>VACÍAS</span><span>OCUPADAS</span>'
-                f'</div>'
-                f'{filas}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            col.markdown(
-                f'<div class="pasillo-card">'
-                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
-                f'<div class="pasillo-stats">'
-                f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
-                f'<p>VACÍAS</p></div>'
-                f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
-                f'<p>OCUPADAS</p></div>'
-                f'</div></div>'.replace(",", "."),
-                unsafe_allow_html=True,
-            )
-
-    TARJETAS_POR_FILA = 7
-    pasillos_lista = list(gp.index)
-    for i in range(0, len(pasillos_lista), TARJETAS_POR_FILA):
-        fila = pasillos_lista[i:i + TARJETAS_POR_FILA]
-        cols_fila = st.columns(TARJETAS_POR_FILA)
-        for col, pasillo in zip(cols_fila, fila):
-            pasillo_card(
-                col, pasillo,
-                int(gp.loc[pasillo, "disponibles"]),
-                int(gp.loc[pasillo, "ocupadas"]),
-            )
-
-    st.write("")
     st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
 
     col_filtro_pas, col_filtro_estado = st.columns([1, 1])
