@@ -609,7 +609,7 @@ def render_almacenamiento(
 
     # ----------------------------------------------------------------------
     # Todo el contenido en una sola vista (sin tabs), en orden lógico:
-    # resumen -> por pasillo -> por bodega -> nivel/pasillo -> detalle
+    # resumen -> por pasillo -> por bodega -> treemap -> nivel/pasillo -> detalle
     # ----------------------------------------------------------------------
     BASE_LAYOUT = dict(
         # Fondo fijo para que la app conserve el diseño oscuro,
@@ -622,78 +622,6 @@ def render_almacenamiento(
             font=dict(family=PLOTLY_FONT_FAMILY, color="#F1F5F9"),
         ),
     )
-
-    st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
-    fig_total = go.Figure()
-    fig_total.add_trace(
-        go.Bar(
-            x=[ocupadas], y=["Ubicaciones"], orientation="h",
-            name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-            text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Ocupadas: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.add_trace(
-        go.Bar(
-            x=[disponibles], y=["Ubicaciones"], orientation="h",
-            name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-            text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Disponibles: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.update_layout(
-        **BASE_LAYOUT,
-        barmode="stack", height=110, bargap=0.55,
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.15, x=0,
-                     bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
-
-    st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
-    gp = (
-        df.groupby("PASILLO")
-        .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-        .reindex(sorted(df["PASILLO"].unique()))
-    )
-    gp["total"] = gp["ocupadas"] + gp["disponibles"]
-
-    fig_pas = go.Figure()
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
-               marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-               text=gp["ocupadas"], textposition="inside",
-               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
-               hovertemplate="Pasillo %{x}<br>Ocupadas: %{y:,.0f}<extra></extra>")
-    )
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
-               marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-               text=gp["disponibles"].replace(0, ""), textposition="inside",
-               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
-               hovertemplate="Pasillo %{x}<br>Disponibles: %{y:,.0f}<extra></extra>")
-    )
-    for pasillo, row in gp.iterrows():
-        fig_pas.add_annotation(
-            x=pasillo, y=row["total"], text=f"{int(row['total'])}",
-            showarrow=False, yshift=14,
-            font=dict(size=11, color=COLOR_TEXT_MUTED, family=PLOTLY_FONT_FAMILY),
-        )
-    fig_pas.update_layout(
-        **BASE_LAYOUT,
-        barmode="stack", height=380, bargap=0.32,
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis=dict(title="Pasillo", showgrid=False, linecolor=COLOR_GRID),
-        yaxis=dict(title="Ubicaciones", showgrid=True, gridcolor=COLOR_GRID,
-                    zeroline=False),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                     bgcolor="rgba(0,0,0,0)"),
-    )
-    st.plotly_chart(fig_pas, use_container_width=True)
 
     st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
 
