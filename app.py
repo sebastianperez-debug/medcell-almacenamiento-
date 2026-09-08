@@ -524,15 +524,10 @@ def render_almacenamiento(
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False, sheet_name="UBICACIONES_FILTRADO")
 
-    df_vacias = df_raw[
-        df_raw["PASILLO"].isin(pasillos_activos)
-        & df_raw["Bodega"].isin(bodegas_activas)
-        & (df_raw["VACIAS"] > 0)
-    ]
-    if localizador_q:
-        df_vacias = df_vacias[
-            df_vacias["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)
-        ]
+    # El CSV de "solo vacías" debe usar exactamente el mismo DataFrame
+    # filtrado que alimenta los letreros/KPIs. Así, la cantidad descargada
+    # coincide con "Ubicaciones disponibles/vacías" que se muestra arriba.
+    df_vacias = df[df["VACIAS"] > 0].copy()
     csv_vacias = df_vacias.to_csv(index=False).encode("utf-8-sig")
 
     col_desc_principal, col_desc_vacias = st.columns([3, 2])
