@@ -18,6 +18,8 @@ import plotly.express as px
 from plotly.colors import sample_colorscale
 import streamlit as st
 import streamlit.components.v1 as components
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 # ----------------------------------------------------------------------
 # Configuración de página y paleta de colores
@@ -323,6 +325,60 @@ def _dedent_html(html: str) -> str:
     return "\n".join(line.strip() for line in html.strip("\n").split("\n"))
 
 
+def _estilizar_hoja_resumen(ws):
+    """Da formato de tabla al resumen tipo tabla dinámica (hoja 'Resumen')."""
+    COLOR_HEADER = "1F2A44"     # azul oscuro (encabezado)
+    COLOR_TOTAL = "E8EDF7"      # celeste muy claro (fila/columna de totales)
+    COLOR_BORDE = "B9C2D0"
+
+    max_row = ws.max_row
+    max_col = ws.max_column
+
+    borde_fino = Border(
+        left=Side(style="thin", color=COLOR_BORDE),
+        right=Side(style="thin", color=COLOR_BORDE),
+        top=Side(style="thin", color=COLOR_BORDE),
+        bottom=Side(style="thin", color=COLOR_BORDE),
+    )
+
+    # Encabezado (fila 1: "Bodega" + nombres de pasillo + "Total general")
+    for col in range(1, max_col + 1):
+        celda = ws.cell(row=1, column=col)
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor=COLOR_HEADER)
+        celda.alignment = Alignment(horizontal="center", vertical="center")
+        celda.border = borde_fino
+
+    # Cuerpo de la tabla
+    for fila in range(2, max_row + 1):
+        es_fila_total = ws.cell(row=fila, column=1).value == "Total general"
+        for col in range(1, max_col + 1):
+            celda = ws.cell(row=fila, column=col)
+            es_col_total = col == max_col
+            celda.border = borde_fino
+            if col == 1:
+                celda.alignment = Alignment(horizontal="left", vertical="center")
+            else:
+                celda.alignment = Alignment(horizontal="center", vertical="center")
+                if isinstance(celda.value, (int, float)):
+                    celda.number_format = "#,##0"
+            if es_fila_total or es_col_total:
+                celda.font = Font(bold=True)
+                celda.fill = PatternFill("solid", fgColor=COLOR_TOTAL)
+
+    # Ancho de columnas ajustado al contenido
+    for col in range(1, max_col + 1):
+        letra = get_column_letter(col)
+        largo = max(
+            (len(str(ws.cell(row=r, column=col).value)) for r in range(1, max_row + 1)),
+            default=8,
+        )
+        ws.column_dimensions[letra].width = max(largo + 3, 10 if col > 1 else 16)
+
+    ws.row_dimensions[1].height = 20
+    ws.freeze_panes = "B2"
+
+
 with st.sidebar:
     st.header("Fuente de datos")
     uploaded = st.file_uploader(
@@ -565,6 +621,7 @@ def render_almacenamiento(
     buffer_vacias = io.BytesIO()
     with pd.ExcelWriter(buffer_vacias, engine="openpyxl") as writer:
         pivot_vacias.to_excel(writer, sheet_name="Resumen")
+        _estilizar_hoja_resumen(writer.sheets["Resumen"])
 
         # Hojas siguientes: una por pasillo, con el detalle de ubicaciones vacías.
         hojas_usadas = {"Resumen"}
