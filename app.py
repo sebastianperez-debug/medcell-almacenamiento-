@@ -762,9 +762,9 @@ def render_almacenamiento(
     # ----------------------------------------------------------------------
     # Heatmap Nivel x Pasillo
     # ----------------------------------------------------------------------
-    # Normalizamos NIVEL para evitar que valores como 1, 1.0 o "Nivel 1"
-    # terminen mezclados. La operación se fuerza a mostrar SIEMPRE los
-    # niveles 1 al 7, aunque alguno no tenga registros bajo los filtros.
+    # Se usa un eje NUMÉRICO para forzar la visualización de los niveles 1-7,
+    # incluso cuando el nivel 7 no tiene registros bajo los filtros activos.
+    # En pantalla se muestran solamente las letras de los pasillos.
     def nivel_numero(v):
         if pd.isna(v):
             return None
@@ -785,38 +785,42 @@ def render_almacenamiento(
         key=lambda x: (0, int(float(x))) if str(x).replace('.', '', 1).isdigit() else (1, str(x))
     )
 
-    # Porcentaje por combinación nivel/pasillo.
-    piv_base = df_heat.pivot_table(
-        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="mean"
-    ) * 100
-    piv_base = piv_base.reindex(index=niveles, columns=pasillos_heat)
+    # Porcentaje por combinación Nivel/Pasillo.
+    piv_base = (
+        df_heat.pivot_table(
+            index="NIVEL_NUM", columns="PASILLO",
+            values="OCUPADA", aggfunc="mean"
+        ) * 100
+    ).reindex(index=niveles, columns=pasillos_heat)
 
-    # Totales por nivel y pasillo, calculados sobre los filtros activos.
     nivel_totales = (
-        df_heat.groupby("NIVEL_NUM")["OCUPADA"].mean()
-        .mul(100).reindex(niveles)
+        df_heat.groupby("NIVEL_NUM")["OCUPADA"]
+        .mean().mul(100).reindex(niveles)
     )
     pasillo_totales = (
-        df_heat.groupby("PASILLO")["OCUPADA"].mean()
-        .mul(100).reindex(pasillos_heat)
+        df_heat.groupby("PASILLO")["OCUPADA"]
+        .mean().mul(100).reindex(pasillos_heat)
     )
 
     piv = piv_base.copy()
-    # Siempre mostrar los 7 niveles, aunque un nivel no tenga datos.
-    piv.index = pd.Index(niveles, name="NIVEL")
     piv["Total"] = nivel_totales.values
     fila_total = pasillo_totales.copy()
     fila_total["Total"] = df_heat["OCUPADA"].mean() * 100 if not df_heat.empty else None
     piv.loc["Total"] = fila_total
 
-    # Matrices auxiliares para el tooltip: ocupadas, vacías y total de
-    # ubicaciones de cada casilla. Si no existe la combinación, queda 0.
-    total_base = df_heat.pivot_table(
-        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="size"
-    ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
-    ocupadas_base = df_heat.pivot_table(
-        index="NIVEL_NUM", columns="PASILLO", values="OCUPADA", aggfunc="sum"
-    ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
+    # Matrices auxiliares para el tooltip.
+    total_base = (
+        df_heat.pivot_table(
+            index="NIVEL_NUM", columns="PASILLO",
+            values="OCUPADA", aggfunc="size"
+        ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
+    )
+    ocupadas_base = (
+        df_heat.pivot_table(
+            index="NIVEL_NUM", columns="PASILLO",
+            values="OCUPADA", aggfunc="sum"
+        ).reindex(index=niveles, columns=pasillos_heat).fillna(0)
+    )
     vacias_base = total_base - ocupadas_base
 
     total_m = total_base.copy()
@@ -831,9 +835,7 @@ def render_almacenamiento(
     ocupadas_m.loc["Total"] = ocupadas_m.sum(axis=0)
     vacias_m.loc["Total"] = vacias_m.sum(axis=0)
 
-    text_vals = piv.map(
-        lambda x: "" if pd.isna(x) else f"{x:.1f}%"
-    )
+    text_vals = piv.map(lambda x: "" if pd.isna(x) else f"{x:.1f}%")
 
     customdata = []
     for r in piv.index:
@@ -846,11 +848,16 @@ def render_almacenamiento(
             ])
         customdata.append(row)
 
+    # Ejes numéricos: esto evita que Plotly elimine el Nivel 7 cuando toda
+    # su fila está vacía/NaN. Las etiquetas visibles siguen siendo amigables.
+    x_positions = list(range(len(piv.columns)))
+    y_positions = list(range(1, 8)) + [8]
+
     fig_heat = go.Figure(
         data=go.Heatmap(
             z=piv.values,
-            x=[str(c) for c in piv.columns],
-            y=[str(r) for r in piv.index],
+            x=x_positions,
+            y=y_positions,
             customdata=customdata,
             colorscale=[
                 [0.00, COLOR_VERDE],
@@ -883,20 +890,26 @@ def render_almacenamiento(
                 len=0.82,
             ),
             hovertemplate=(
-                "<b>Nivel %{y} · Pasillo %{x}</b><br>"
+                "<b>Nivel %{y} · Pasillo %{customdata[3]}</b><br>"
                 "Ocupación: %{z:.1f}%<br>"
-                "Ubicaciones ocupadas: %{customdata[0]:,.0f}<br>"
-                "Ubicaciones vacías: %{customdata[1]:,.0f}<br>"
-                "Ubicaciones totales: %{customdata[2]:,.0f}"
+                "<b>Posiciones vacías: %{customdata[1]:,.0f}</b><br>"
+                "Posiciones ocupadas: %{customdata[0]:,.0f}<br>"
+                "Posiciones totales: %{customdata[2]:,.0f}"
                 "<extra></extra>"
             ),
         )
     )
 
+    # Agregamos la letra del pasillo al customdata sin alterar el resto.
+    for i in range(len(customdata)):
+        for j in range(len(customdata[i])):
+            customdata[i][j].append(str(piv.columns[j]))
+    fig_heat.data[0].customdata = customdata
+
     fig_heat.update_layout(
         **BASE_LAYOUT,
         height=520,
-        margin=dict(l=92, r=100, t=70, b=70),
+        margin=dict(l=95, r=100, t=75, b=45),
         xaxis=dict(
             title=dict(
                 text="Pasillo",
@@ -904,14 +917,17 @@ def render_almacenamiento(
             ),
             side="top",
             tickmode="array",
-            tickvals=[str(c) for c in piv.columns],
-            ticktext=[f"Pasillo {c}" if str(c) != "Total" else "Total"
-                      for c in piv.columns],
+            tickvals=x_positions,
+            # Solo la letra: A, B, C... M, N, Total.
+            ticktext=[
+                str(c) if str(c) == "Total" else str(c).strip()
+                for c in piv.columns
+            ],
             tickangle=0,
-            tickfont=dict(size=11, color="#E2E8F0"),
+            tickfont=dict(size=12, color="#E2E8F0"),
             showgrid=False,
             zeroline=False,
-            automargin=True,
+            range=[-0.5, len(piv.columns)-0.5],
         ),
         yaxis=dict(
             title=dict(
@@ -919,14 +935,12 @@ def render_almacenamiento(
                 font=dict(size=12, color="#E2E8F0"),
             ),
             tickmode="array",
-            tickvals=[str(r) for r in piv.index],
-            ticktext=[f"Nivel {r}" if str(r) != "Total" else "Total"
-                      for r in piv.index],
+            tickvals=y_positions,
+            ticktext=[f"Nivel {r}" for r in niveles] + ["Total"],
             tickfont=dict(size=11, color="#E2E8F0"),
-            autorange="reversed",
+            range=[8.5, 0.5],
             showgrid=False,
             zeroline=False,
-            automargin=True,
         ),
     )
 
