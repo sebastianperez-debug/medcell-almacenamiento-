@@ -139,13 +139,13 @@ CSS = f"""
     }}
     .pasillo-card.pasillo-card-detalle {{
         min-height:210px;
-        padding-left:10px;
-        padding-right:10px;
+        padding-left:7px;
+        padding-right:7px;
     }}
     .pasillo-cat-head,
     .pasillo-cat-row {{
         display:grid;
-        grid-template-columns:minmax(92px, 1fr) 48px 58px;
+        grid-template-columns:minmax(96px, 1fr) 43px 55px;
         gap:3px;
         align-items:center;
     }}
@@ -153,7 +153,7 @@ CSS = f"""
         margin-top:12px;
         padding:0 4px 6px;
         color:#8EA7C7;
-        font-size:9px;
+        font-size:8px;
         font-weight:700;
         border-bottom:1px solid #2B344A;
     }}
@@ -180,6 +180,7 @@ CSS = f"""
         font-size:9px;
         text-align:right;
         white-space:nowrap;
+        overflow:hidden;
     }}
     .pasillo-cat-occupied {{
         color:#FFC400;
@@ -187,6 +188,7 @@ CSS = f"""
         font-size:9px;
         text-align:right;
         white-space:nowrap;
+        overflow:hidden;
     }}
     .pasillo-stats {{
         display:flex;
