@@ -736,7 +736,7 @@ def render_almacenamiento(
 
 
 
-    # Datos base para las tarjetas por pasillo (antes de los gráficos posteriores).
+    # Datos para las tarjetas por pasillo (independiente del gráfico posterior).
     gp_cards = (
         df.groupby("PASILLO")
         .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
