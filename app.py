@@ -793,20 +793,7 @@ def render_almacenamiento(
         ) * 100
     ).reindex(index=niveles, columns=pasillos_heat)
 
-    nivel_totales = (
-        df_heat.groupby("NIVEL_NUM")["OCUPADA"]
-        .mean().mul(100).reindex(niveles)
-    )
-    pasillo_totales = (
-        df_heat.groupby("PASILLO")["OCUPADA"]
-        .mean().mul(100).reindex(pasillos_heat)
-    )
-
     piv = piv_base.copy()
-    piv["Total"] = nivel_totales.values
-    fila_total = pasillo_totales.copy()
-    fila_total["Total"] = df_heat["OCUPADA"].mean() * 100 if not df_heat.empty else None
-    piv.loc["Total"] = fila_total
 
     # Matrices auxiliares para el tooltip.
     total_base = (
@@ -827,14 +814,6 @@ def render_almacenamiento(
     ocupadas_m = ocupadas_base.copy()
     vacias_m = vacias_base.copy()
 
-    total_m["Total"] = total_m.sum(axis=1)
-    ocupadas_m["Total"] = ocupadas_m.sum(axis=1)
-    vacias_m["Total"] = vacias_m.sum(axis=1)
-
-    total_m.loc["Total"] = total_m.sum(axis=0)
-    ocupadas_m.loc["Total"] = ocupadas_m.sum(axis=0)
-    vacias_m.loc["Total"] = vacias_m.sum(axis=0)
-
     text_vals = piv.map(lambda x: "" if pd.isna(x) else f"{x:.1f}%")
 
     customdata = []
@@ -851,7 +830,7 @@ def render_almacenamiento(
     # Ejes numéricos: esto evita que Plotly elimine el Nivel 7 cuando toda
     # su fila está vacía/NaN. Las etiquetas visibles siguen siendo amigables.
     x_positions = list(range(len(piv.columns)))
-    y_positions = list(range(1, 8)) + [8]
+    y_positions = list(range(1, 8))
 
     fig_heat = go.Figure(
         data=go.Heatmap(
@@ -918,11 +897,8 @@ def render_almacenamiento(
             side="top",
             tickmode="array",
             tickvals=x_positions,
-            # Solo la letra: A, B, C... M, N, Total.
-            ticktext=[
-                str(c) if str(c) == "Total" else str(c).strip()
-                for c in piv.columns
-            ],
+            # Solo la letra del pasillo: A, B, C... N.
+            ticktext=[str(c).strip() for c in piv.columns],
             tickangle=0,
             tickfont=dict(size=12, color="#E2E8F0"),
             showgrid=False,
