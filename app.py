@@ -524,11 +524,19 @@ def render_almacenamiento(
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False, sheet_name="UBICACIONES_FILTRADO")
 
-    # El CSV de "solo vacías" debe usar exactamente el mismo DataFrame
+    # El reporte de "solo vacías" debe usar exactamente el mismo DataFrame
     # filtrado que alimenta los letreros/KPIs. Así, la cantidad descargada
     # coincide con "Ubicaciones disponibles/vacías" que se muestra arriba.
     df_vacias = df[df["VACIAS"] > 0].copy()
-    csv_vacias = df_vacias.to_csv(index=False).encode("utf-8-sig")
+
+    # Columnas auxiliares/internas que no queremos exportar.
+    df_vacias = df_vacias.drop(
+        columns=["Par", "OCUPADA", "ALMACENAMIENTO_FLAG", "ES_RECETARIO"],
+        errors="ignore",
+    )
+
+    buffer_vacias = io.BytesIO()
+    df_vacias.to_excel(buffer_vacias, index=False, sheet_name="VACIAS")
 
     col_desc_principal, col_desc_vacias = st.columns([3, 2])
     with col_desc_principal:
@@ -541,11 +549,11 @@ def render_almacenamiento(
         )
     with col_desc_vacias:
         st.download_button(
-            label=f"⬇️ Descargar solo vacías (CSV) · {len(df_vacias):,} ubicaciones"
+            label=f"⬇️ Descargar solo vacías (Excel) · {len(df_vacias):,} ubicaciones"
             .replace(",", "."),
-            data=csv_vacias,
-            file_name=f"ubicaciones_vacias_{date.today().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
+            data=buffer_vacias.getvalue(),
+            file_name=f"ubicaciones_vacias_{date.today().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
 
