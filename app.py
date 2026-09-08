@@ -623,6 +623,19 @@ def render_almacenamiento(
         ),
     )
 
+    # Resumen por pasillo para las tarjetas.
+    # Se mantiene independiente de los gráficos eliminados.
+    gp = (
+        df.groupby("PASILLO")
+        .agg(
+            ocupadas=("OCUPADA", "sum"),
+            disponibles=("OCUPADA", lambda s: (~s).sum()),
+        )
+        .reindex(sorted(df["PASILLO"].astype(str).str.strip().unique()))
+    )
+
+    gp.index = gp.index.astype(str).str.strip()
+
     st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
 
     def pasillo_card(col, pasillo, vacias, ocupadas):
