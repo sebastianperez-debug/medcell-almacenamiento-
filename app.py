@@ -137,47 +137,47 @@ CSS = f"""
         color:#F2F2F2;
         margin:0 0 8px 0;
     }}
-    .pasillo-card .pasillo-card-detalle {
-    min-height: 185px;
-}
-.pasillo-cat-head,
-.pasillo-cat-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 58px 68px;
-    gap: 6px;
-    align-items: center;
-}
-.pasillo-cat-head {
-    margin-top: 12px;
-    padding: 0 8px 6px;
-    color: #8EA7C7;
-    font-size: 9px;
-    font-weight: 700;
-    border-bottom: 1px solid #2B344A;
-}
-.pasillo-cat-row {
-    padding: 5px 8px;
-    font-size: 10px;
-    border-bottom: 1px solid rgba(43,52,74,.55);
-}
-.pasillo-cat-name {
-    color: #E2E8F0;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.pasillo-cat-empty {
-    color: #20D46B;
-    font-weight: 800;
-    text-align: right;
-}
-.pasillo-cat-occupied {
-    color: #FFC400;
-    font-weight: 800;
-    text-align: right;
-}
-.pasillo-stats {{
+    .pasillo-card .pasillo-card-detalle {{
+        min-height:185px;
+    }}
+    .pasillo-cat-head,
+    .pasillo-cat-row {{
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) 58px 68px;
+        gap:6px;
+        align-items:center;
+    }}
+    .pasillo-cat-head {{
+        margin-top:12px;
+        padding:0 8px 6px;
+        color:#8EA7C7;
+        font-size:9px;
+        font-weight:700;
+        border-bottom:1px solid #2B344A;
+    }}
+    .pasillo-cat-row {{
+        padding:5px 8px;
+        font-size:10px;
+        border-bottom:1px solid rgba(43,52,74,.55);
+    }}
+    .pasillo-cat-name {{
+        color:#E2E8F0;
+        text-align:left;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }}
+    .pasillo-cat-empty {{
+        color:#20D46B;
+        font-weight:800;
+        text-align:right;
+    }}
+    .pasillo-cat-occupied {{
+        color:#FFC400;
+        font-weight:800;
+        text-align:right;
+    }}
+    .pasillo-stats {{
         display:flex;
         justify-content:space-around;
     }}
