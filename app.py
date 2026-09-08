@@ -535,8 +535,47 @@ def render_almacenamiento(
         errors="ignore",
     )
 
+    def _nombre_hoja_excel(nombre: str, usados: set) -> str:
+        """Sanitiza y garantiza nombres de hoja únicos y válidos (máx 31 car.)."""
+        limpio = str(nombre).strip() or "SinPasillo"
+        for ch in r"[]:*?/\\":
+            limpio = limpio.replace(ch, "-")
+        limpio = limpio[:31]
+        base = limpio
+        i = 2
+        while limpio in usados:
+            sufijo = f"_{i}"
+            limpio = f"{base[: 31 - len(sufijo)]}{sufijo}"
+            i += 1
+        usados.add(limpio)
+        return limpio
+
+    # Hoja 1: resumen estilo tabla dinámica (Suma de VACIAS por Bodega x Pasillo)
+    pivot_vacias = pd.pivot_table(
+        df_vacias,
+        values="VACIAS",
+        index="Bodega",
+        columns="PASILLO",
+        aggfunc="sum",
+        fill_value=0,
+        margins=True,
+        margins_name="Total general",
+    )
+
     buffer_vacias = io.BytesIO()
-    df_vacias.to_excel(buffer_vacias, index=False, sheet_name="VACIAS")
+    with pd.ExcelWriter(buffer_vacias, engine="openpyxl") as writer:
+        pivot_vacias.to_excel(writer, sheet_name="Resumen")
+
+        # Hojas siguientes: una por pasillo, con el detalle de ubicaciones vacías.
+        hojas_usadas = {"Resumen"}
+        pasillos_orden = sorted(
+            df_vacias["PASILLO"].dropna().astype(str).unique(),
+            key=lambda x: (0, int(float(x))) if x.replace(".", "", 1).isdigit() else (1, x),
+        )
+        for pasillo in pasillos_orden:
+            grupo = df_vacias[df_vacias["PASILLO"].astype(str) == pasillo]
+            nombre_hoja = _nombre_hoja_excel(f"Pasillo {pasillo}", hojas_usadas)
+            grupo.to_excel(writer, sheet_name=nombre_hoja, index=False)
 
     col_desc_principal, col_desc_vacias = st.columns([3, 2])
     with col_desc_principal:
