@@ -139,14 +139,14 @@ CSS = f"""
     }}
     .pasillo-card.pasillo-card-detalle {{
         min-height:210px;
-        padding-left:7px;
-        padding-right:7px;
+        padding-left:4px;
+        padding-right:4px;
     }}
     .pasillo-cat-head,
     .pasillo-cat-row {{
         display:grid;
-        grid-template-columns: 105px 43px 55px;
-        gap:3px;
+        grid-template-columns: 118px 42px 52px;
+        gap:1px;
         align-items:center;
     }}
     .pasillo-cat-head {{
@@ -173,7 +173,7 @@ CSS = f"""
         word-break:normal;
         hyphens:none;
         min-width:0;
-        max-width:105px;
+        max-width:118px;
         white-space:normal;
     }}
     .pasillo-cat-empty {{
