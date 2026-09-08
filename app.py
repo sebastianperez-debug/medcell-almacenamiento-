@@ -505,48 +505,40 @@ def render_almacenamiento(
 
     st.write("")
 
-    # Botón de descarga del reporte filtrado
+    # Botón de descarga del reporte filtrado + botón de descarga de solo
+    # vacías, uno al lado del otro (el de vacías queda a la derecha) para
+    # que la descarga sea de un solo clic, sin tener que abrir nada primero.
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False, sheet_name="UBICACIONES_FILTRADO")
-    st.download_button(
-        label="⬇️ Descargar reporte filtrado (Excel)",
-        data=buffer.getvalue(),
-        file_name=f"almacenamiento_filtrado_{date.today().strftime('%Y%m%d')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
 
-    st.write("")
-
-    # ----------------------------------------------------------------------
-    # Ubicaciones vacías (VACIAS > 0) — tabla y descarga aparte, independiente
-    # de los filtros de Almacenamiento/Recetario, pero respeta Pasillo/Bodega
-    # y la búsqueda de localizador ya aplicados arriba.
-    # ----------------------------------------------------------------------
-    with st.expander("📭 Ver y descargar solo ubicaciones vacías", expanded=False):
-        df_vacias = df_raw[
-            df_raw["PASILLO"].isin(pasillos_activos)
-            & df_raw["Bodega"].isin(bodegas_activas)
-            & (df_raw["VACIAS"] > 0)
+    df_vacias = df_raw[
+        df_raw["PASILLO"].isin(pasillos_activos)
+        & df_raw["Bodega"].isin(bodegas_activas)
+        & (df_raw["VACIAS"] > 0)
+    ]
+    if localizador_q:
+        df_vacias = df_vacias[
+            df_vacias["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)
         ]
-        if localizador_q:
-            df_vacias = df_vacias[
-                df_vacias["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)
-            ]
+    csv_vacias = df_vacias.to_csv(index=False).encode("utf-8-sig")
 
-        st.caption(
-            f"**{len(df_vacias):,}** ubicaciones vacías encontradas "
-            f"(según Pasillo/Bodega/localizador seleccionados, "
-            f"sin aplicar el filtro de Almacenamiento/Recetario)."
-            .replace(",", ".")
-        )
-        st.dataframe(df_vacias, use_container_width=True, height=280)
-
-        csv_vacias = df_vacias.to_csv(index=False).encode("utf-8-sig")
+    col_desc_principal, col_desc_vacias = st.columns([3, 2])
+    with col_desc_principal:
         st.download_button(
-            label="⬇️ Descargar vacías (CSV)",
+            label="⬇️ Descargar reporte filtrado (Excel)",
+            data=buffer.getvalue(),
+            file_name=f"almacenamiento_filtrado_{date.today().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with col_desc_vacias:
+        st.download_button(
+            label=f"⬇️ Descargar solo vacías (CSV) · {len(df_vacias):,} ubicaciones"
+            .replace(",", "."),
             data=csv_vacias,
             file_name=f"ubicaciones_vacias_{date.today().strftime('%Y%m%d')}.csv",
             mime="text/csv",
+            use_container_width=True,
         )
 
     st.write("")
@@ -747,6 +739,7 @@ def render_almacenamiento(
         marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
         textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
         hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
+        root_color="rgba(0,0,0,0)",
     )
     fig_tree.update_layout(
         height=320, margin=dict(l=10, r=10, t=10, b=10),
@@ -838,11 +831,20 @@ def render_almacenamiento(
     # Se ocultan ALMACENAMIENTO y OBSERVACIONES: son las columnas crudas del
     # Excel que casi siempre vienen vacías (se ven como "None"); su
     # información resumida ya está en ALMACENAMIENTO_FLAG y ES_RECETARIO.
-    # VACIAS se muestra como casilla (tick = 1, vacía = 0) igual que
-    # Par y OCUPADA, en vez del número crudo.
+    # VACIAS, OCUPADA y Par se muestran como palabras ("Vacía"/"Con stock",
+    # "Ocupada"/"Disponible", "Sí"/"No") en vez de casillas ✓, para que sea
+    # más fácil de leer de un vistazo.
     df_detalle = df_detalle.drop(columns=["ALMACENAMIENTO", "OBSERVACIONES"], errors="ignore")
     if "VACIAS" in df_detalle.columns:
-        df_detalle["VACIAS"] = df_detalle["VACIAS"].astype(bool)
+        df_detalle["VACIAS"] = df_detalle["VACIAS"].apply(
+            lambda x: "Vacía" if x else "Con stock"
+        )
+    if "OCUPADA" in df_detalle.columns:
+        df_detalle["OCUPADA"] = df_detalle["OCUPADA"].apply(
+            lambda x: "Ocupada" if x else "Disponible"
+        )
+    if "Par" in df_detalle.columns:
+        df_detalle["Par"] = df_detalle["Par"].apply(lambda x: "Sí" if x else "No")
 
     st.dataframe(df_detalle, use_container_width=True, height=320)
     st.caption(
