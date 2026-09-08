@@ -116,6 +116,37 @@ CSS = f"""
     }}
 
     div[data-testid="stMetricValue"] {{ font-size: 26px; }}
+
+    /* Tarjetas de detalle por pasillo (vacías / ocupadas) */
+    .pasillo-card {{
+        background-color:{COLOR_CARD_BG};
+        border:1px solid {COLOR_CARD_BORDER};
+        border-radius:10px;
+        padding:10px 8px 12px 8px;
+        text-align:center;
+        margin-bottom:12px;
+    }}
+    .pasillo-card .pasillo-nombre {{
+        font-size:13px;
+        font-weight:700;
+        color:#F2F2F2;
+        margin:0 0 8px 0;
+    }}
+    .pasillo-card .pasillo-stats {{
+        display:flex;
+        justify-content:space-around;
+    }}
+    .pasillo-card .pasillo-stat h1 {{
+        font-size:20px;
+        margin:0;
+        font-weight:700;
+    }}
+    .pasillo-card .pasillo-stat p {{
+        margin:2px 0 0 0;
+        font-size:10px;
+        color:{COLOR_TEXT_MUTED};
+        letter-spacing:.2px;
+    }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -605,6 +636,33 @@ def render_almacenamiento(
                      bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig_pas, use_container_width=True)
+
+    st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
+
+    def pasillo_card(col, pasillo, vacias, ocupadas):
+        col.markdown(
+            f'<div class="pasillo-card">'
+            f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+            f'<div class="pasillo-stats">'
+            f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
+            f'<p>VACÍAS</p></div>'
+            f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
+            f'<p>OCUPADAS</p></div>'
+            f'</div></div>'.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+
+    TARJETAS_POR_FILA = 7
+    pasillos_lista = list(gp.index)
+    for i in range(0, len(pasillos_lista), TARJETAS_POR_FILA):
+        fila = pasillos_lista[i:i + TARJETAS_POR_FILA]
+        cols_fila = st.columns(TARJETAS_POR_FILA)
+        for col, pasillo in zip(cols_fila, fila):
+            pasillo_card(
+                col, pasillo,
+                int(gp.loc[pasillo, "disponibles"]),
+                int(gp.loc[pasillo, "ocupadas"]),
+            )
 
     st.write("")
     c1, c2 = st.columns(2)
