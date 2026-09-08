@@ -802,7 +802,9 @@ def render_almacenamiento(
     )
 
     piv = piv_base.copy()
-    piv["Total"] = nivel_totales
+    # Siempre mostrar los 7 niveles, aunque un nivel no tenga datos.
+    piv.index = pd.Index(niveles, name="NIVEL")
+    piv["Total"] = nivel_totales.values
     fila_total = pasillo_totales.copy()
     fila_total["Total"] = df_heat["OCUPADA"].mean() * 100 if not df_heat.empty else None
     piv.loc["Total"] = fila_total
@@ -829,7 +831,7 @@ def render_almacenamiento(
     ocupadas_m.loc["Total"] = ocupadas_m.sum(axis=0)
     vacias_m.loc["Total"] = vacias_m.sum(axis=0)
 
-    text_vals = piv.applymap(
+    text_vals = piv.map(
         lambda x: "" if pd.isna(x) else f"{x:.1f}%"
     )
 
@@ -893,18 +895,19 @@ def render_almacenamiento(
 
     fig_heat.update_layout(
         **BASE_LAYOUT,
-        height=470,
-        margin=dict(l=72, r=100, t=55, b=90),
+        height=520,
+        margin=dict(l=92, r=100, t=70, b=70),
         xaxis=dict(
             title=dict(
                 text="Pasillo",
                 font=dict(size=12, color="#E2E8F0"),
             ),
-            side="bottom",
+            side="top",
             tickmode="array",
             tickvals=[str(c) for c in piv.columns],
-            ticktext=[str(c) for c in piv.columns],
-            tickangle=-45,
+            ticktext=[f"Pasillo {c}" if str(c) != "Total" else "Total"
+                      for c in piv.columns],
+            tickangle=0,
             tickfont=dict(size=11, color="#E2E8F0"),
             showgrid=False,
             zeroline=False,
@@ -917,7 +920,8 @@ def render_almacenamiento(
             ),
             tickmode="array",
             tickvals=[str(r) for r in piv.index],
-            ticktext=[str(r) for r in piv.index],
+            ticktext=[f"Nivel {r}" if str(r) != "Total" else "Total"
+                      for r in piv.index],
             tickfont=dict(size=11, color="#E2E8F0"),
             autorange="reversed",
             showgrid=False,
