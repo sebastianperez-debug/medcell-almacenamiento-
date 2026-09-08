@@ -29,27 +29,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Paleta profesional para tema oscuro — índigo/teal, look "SaaS" moderno,
-# más desaturada que naranja/verde-azulado puro (evita el aire "años 2010").
-# Ocupado/Disponible: contraste frío/frío-cálido, cohesivo con el resto
-# de la app (no se confunde con el semáforo de severidad de las tarjetas KPI).
 COLOR_OCUPADA = "#EAB308"       # amarillo dorado (ocupado, cálido)
 COLOR_DISPONIBLE = "#22C55E"    # verde vívido (disponible, libre)
 
-# Semáforo de severidad (KPIs y heatmap) — tonos "flat design" suavizados
 COLOR_ROJO = "#FB7185"          # crítico (>90%)
 COLOR_AMARILLO = "#FBBF24"      # atención (70-90%)
 COLOR_VERDE = "#34D399"         # saludable (<70%)
 
-# Acentos secundarios para gráficos de composición / treemap
 COLOR_ACENTO_1 = "#818CF8"      # índigo claro
-COLOR_ACENTO_2 = "#22C55E"      # verde (mismo que disponible, para cohesión)
+COLOR_ACENTO_2 = "#22C55E"      # verde
 COLOR_NEUTRO = "#334155"        # slate oscuro de fondo para escalas
 
 COLOR_CARD_BG = "#161B2C"
 COLOR_CARD_BORDER = "#2A2F45"
 COLOR_TEXT_MUTED = "#94A3B8"
-COLOR_GRID = "rgba(148, 163, 184, 0.12)"   # grilla sutil, casi invisible
+COLOR_GRID = "rgba(148, 163, 184, 0.12)"   # grilla sutil
 PLOTLY_FONT_FAMILY = "Inter, -apple-system, Segoe UI, sans-serif"
 
 DATA_PATH = "data/Almacenamiento_2026.xlsx"
@@ -253,18 +247,6 @@ def load_data(file) -> pd.DataFrame:
 
 @st.cache_data(show_spinner="Cargando datos de stock...")
 def load_stock_data(file) -> pd.DataFrame:
-    """Carga la hoja de detalle de STOCK (fecha de caducidad) del mismo Excel.
-
-    El archivo puede traer la data en una hoja llamada 'STOCK' o
-    'STOCK EN POSICION' (según cómo se haya pegado). Se prioriza
-    'STOCK EN POSICION' porque es la que trae el detalle completo de
-    lote/localizador/fecha de expiración; si no existe, se cae a 'STOCK'.
-
-    Se lee con dtype=str (igual que en el dashboard original de Medcell
-    Operaciones) porque los códigos de artículo/SKU vienen con ceros a
-    la izquierda o formatos tipo '0007341.7' que se rompen si Excel/pandas
-    los infiere como número.
-    """
     posibles_nombres = ["STOCK EN POSICION", "STOCK"]
     xls = pd.ExcelFile(file)
     nombre_encontrado = next(
@@ -276,8 +258,7 @@ def load_stock_data(file) -> pd.DataFrame:
         )
     if nombre_encontrado is None:
         raise ValueError(
-            "No encontré ninguna hoja de STOCK (probé 'STOCK EN POSICION', "
-            "'STOCK' y cualquier hoja que contenga 'stock' en el nombre). "
+            "No encontré ninguna hoja de STOCK. "
             f"Hojas disponibles en el archivo: {xls.sheet_names}"
         )
 
@@ -289,7 +270,6 @@ def load_stock_data(file) -> pd.DataFrame:
 
 
 def fmt_code(val):
-    """Preserva ceros a la izquierda y formatos de código de origen como 0007341.7"""
     if pd.isna(val) or val == "" or val is None or str(val).lower() == "nan":
         return "S/N"
     val_str = str(val).strip()
@@ -299,7 +279,6 @@ def fmt_code(val):
 
 
 def limpiar_numero(val):
-    """Limpia cadenas numéricas de Excel preservando la escala real de enteros y decimales."""
     if pd.isna(val) or val == "" or val is None or str(val).lower() == "nan":
         return 0.0
     if isinstance(val, (int, float)):
@@ -341,7 +320,6 @@ def formato_unidades(valor):
 
 
 def _dedent_html(html: str) -> str:
-    """Quita la indentación de cada línea antes de pasarla a st.markdown."""
     return "\n".join(line.strip() for line in html.strip("\n").split("\n"))
 
 
@@ -379,19 +357,15 @@ if df_raw is None and df_stock_raw is None:
     st.stop()
 
 # ----------------------------------------------------------------------
-# Filtros (barra lateral) — aplican solo a la pestaña Almacenamiento
+# Filtros (barra lateral)
 # ----------------------------------------------------------------------
 st.sidebar.header("Filtros — Almacenamiento")
 
 pasillos = sorted(df_raw["PASILLO"].unique()) if df_raw is not None else []
 bodegas = sorted(df_raw["Bodega"].unique()) if df_raw is not None else []
 
-# Búsqueda de localizador siempre visible (es la más usada / rápida)
 localizador_q = st.sidebar.text_input("🔎 Buscar localizador")
 
-# Pasillo y Bodega van dentro de un expander colapsado: arrancan sin
-# selección (= sin filtro / se muestra todo) para no saturar la vista
-# con chips. El usuario los abre solo si quiere acotar algo puntual.
 with st.sidebar.expander("📍 Pasillo y Bodega", expanded=False):
     bp1, bp2 = st.columns(2)
     if bp1.button("Todo", key="pasillo_todo", use_container_width=True):
@@ -413,12 +387,9 @@ with st.sidebar.expander("📍 Pasillo y Bodega", expanded=False):
         placeholder="Todas (sin selección = todas)",
     )
 
-# Sin selección = no se filtra por esa dimensión (se interpreta como "todos")
 pasillos_activos = sel_pasillos if sel_pasillos else pasillos
 bodegas_activas = sel_bodegas if sel_bodegas else bodegas
 
-# Resumen visible aunque el expander esté cerrado, para que el usuario
-# sepa qué está filtrando sin tener que abrirlo
 resumen_pasillo = "Todos" if not sel_pasillos else f"{len(sel_pasillos)} seleccionados"
 resumen_bodega = "Todas" if not sel_bodegas else f"{len(sel_bodegas)} seleccionadas"
 st.sidebar.caption(f"Pasillo: **{resumen_pasillo}** · Bodega: **{resumen_bodega}**")
@@ -436,13 +407,11 @@ recetario_sel = st.sidebar.radio(
 )
 
 
-
 def render_almacenamiento(
     df_raw, pasillos_activos, bodegas_activas, localizador_q,
     almacenamiento_sel, recetario_sel,
 ):
     """Renderiza el dashboard de Almacenamiento (pestaña 1)."""
-    # Aplicar filtros
     df = df_raw[
         df_raw["PASILLO"].isin(pasillos_activos) & df_raw["Bodega"].isin(bodegas_activas)
     ]
@@ -465,12 +434,6 @@ def render_almacenamiento(
     disponibles = int((~df["OCUPADA"]).sum())
     pct_ocupacion = round(ocupadas / total_localizadores * 100, 1)
 
-    # Pasillo más saturado / con más espacio REAL: las posiciones reservadas
-    # para RECETARIO se cuentan como no disponibles aunque VACIAS>0, y este
-    # cálculo ignora el filtro de la barra lateral "Es Recetario" a propósito
-    # (si no, esas posiciones quedan fuera del cálculo y el pasillo parece
-    # tener más espacio libre del que realmente tiene). Sí respeta
-    # Pasillo/Bodega/búsqueda de localizador.
     df_espacio_real = df_raw[
         df_raw["PASILLO"].isin(pasillos_activos)
         & df_raw["Bodega"].isin(bodegas_activas)
@@ -490,11 +453,6 @@ def render_almacenamiento(
     )
     pasillo_mas_libre = por_pasillo_pct.index[0]
     pasillo_mas_saturado = por_pasillo_pct.index[-1]
-
-    # Ubicaciones "otras" (observaciones distintas de vacío/recetario)
-    otras_obs = df["OBSERVACIONES"].apply(
-        lambda x: pd.notna(x) and x != "RECETARIO"
-    ).sum()
 
     # ----------------------------------------------------------------------
     # Header superior
@@ -517,7 +475,6 @@ def render_almacenamiento(
         unsafe_allow_html=True,
     )
 
-
     def kpi_card(col, value, label, badge_text=None, badge_color=None):
         badge_html = ""
         if badge_text:
@@ -531,8 +488,6 @@ def render_almacenamiento(
             unsafe_allow_html=True,
         )
 
-
-    # Fila de KPIs principales (6 tarjetas)
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     kpi_card(k1, f"{total_localizadores:,}".replace(",", "."), "Localizadores")
     kpi_card(k2, f"{ocupadas:,}".replace(",", "."), "Ubicaciones ocupadas")
@@ -561,17 +516,11 @@ def render_almacenamiento(
 
     st.caption(
         "ℹ️ *Pasillo más saturado/con más espacio* cuentan las posiciones "
-        "reservadas para **RECETARIO** como no disponibles, aunque figuren "
-        "vacías — por eso pueden no coincidir exactamente con el % de "
-        "Ocupación general de arriba (que sí depende del filtro Recetario "
-        "de la barra lateral)."
+        "reservadas para **RECETARIO** como no disponibles, aunque figuren vacías."
     )
 
     st.write("")
 
-    # Botón de descarga del reporte filtrado + botón de descarga de solo
-    # vacías, uno al lado del otro (el de vacías queda a la derecha) para
-    # que la descarga sea de un solo clic, sin tener que abrir nada primero.
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False, sheet_name="UBICACIONES_FILTRADO")
 
@@ -607,13 +556,7 @@ def render_almacenamiento(
 
     st.write("")
 
-    # ----------------------------------------------------------------------
-    # Todo el contenido en una sola vista (sin tabs), en orden lógico:
-    # resumen -> por pasillo -> por bodega -> nivel/pasillo -> detalle
-    # ----------------------------------------------------------------------
     BASE_LAYOUT = dict(
-        # Fondo fijo para que la app conserve el diseño oscuro,
-        # independiente del tema claro/oscuro del navegador o Streamlit.
         paper_bgcolor="#0B0F17",
         plot_bgcolor="#0B0F17",
         font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0", size=12),
@@ -623,154 +566,9 @@ def render_almacenamiento(
         ),
     )
 
-    st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
-    fig_total = go.Figure()
-    fig_total.add_trace(
-        go.Bar(
-            x=[ocupadas], y=["Ubicaciones"], orientation="h",
-            name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-            text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Ocupadas: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.add_trace(
-        go.Bar(
-            x=[disponibles], y=["Ubicaciones"], orientation="h",
-            name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-            text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Disponibles: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.update_layout(
-        **BASE_LAYOUT,
-        barmode="stack", height=110, bargap=0.55,
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.15, x=0,
-                     bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
-
-    st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
-    gp = (
-        df.groupby("PASILLO")
-        .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-        .reindex(sorted(df["PASILLO"].unique()))
-    )
-    gp["total"] = gp["ocupadas"] + gp["disponibles"]
-
-    fig_pas = go.Figure()
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
-               marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-               text=gp["ocupadas"], textposition="inside",
-               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
-               hovertemplate="Pasillo %{x}<br>Ocupadas: %{y:,.0f}<extra></extra>")
-    )
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
-               marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-               text=gp["disponibles"].replace(0, ""), textposition="inside",
-               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
-               hovertemplate="Pasillo %{x}<br>Disponibles: %{y:,.0f}<extra></extra>")
-    )
-    for pasillo, row in gp.iterrows():
-        fig_pas.add_annotation(
-            x=pasillo, y=row["total"], text=f"{int(row['total'])}",
-            showarrow=False, yshift=14,
-            font=dict(size=11, color=COLOR_TEXT_MUTED, family=PLOTLY_FONT_FAMILY),
-        )
-    fig_pas.update_layout(
-        **BASE_LAYOUT,
-        barmode="stack", height=380, bargap=0.32,
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis=dict(title="Pasillo", showgrid=False, linecolor=COLOR_GRID),
-        yaxis=dict(title="Ubicaciones", showgrid=True, gridcolor=COLOR_GRID,
-                    zeroline=False),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                     bgcolor="rgba(0,0,0,0)"),
-    )
-    st.plotly_chart(fig_pas, use_container_width=True)
-
-    st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
-
-    def pasillo_card(col, pasillo, vacias, ocupadas):
-        # A y B tienen más de una categoría. En esas dos tarjetas mostramos
-        # el detalle por categoría; el resto conserva la tarjeta original.
-        if str(pasillo) in ("A", "B"):
-            sub = df[df["PASILLO"].astype(str).str.strip() == str(pasillo)].copy()
-            if "Bodega" in sub.columns:
-                detalle = (
-                    sub.groupby("Bodega", dropna=False)
-                    .agg(
-                        vacias=("VACIAS", "sum"),
-                        ocupadas=("OCUPADA", "sum"),
-                    )
-                    .reset_index()
-                )
-                detalle["Bodega"] = detalle["Bodega"].fillna("SIN CATEGORÍA").astype(str)
-                detalle = detalle.sort_values("Bodega")
-            else:
-                detalle = pd.DataFrame(columns=["Bodega", "vacias", "ocupadas"])
-
-            nombres = {
-                "COSMETICO": "COSMÉTICO",
-                "DISP.MEDICOS": "DISP. MÉDICOS",
-                "INFLAMABLE": "INFLAMABLE",
-                "ALIMENTO": "ALIMENTO",
-                "ALTILLO": "ALTILLO",
-            }
-
-            filas = ""
-            for _, r in detalle.iterrows():
-                categoria = nombres.get(str(r["Bodega"]).strip(), str(r["Bodega"]).strip())
-                filas += (
-                    f'<div class="pasillo-cat-row">'
-                    f'<span class="pasillo-cat-name">{categoria}</span>'
-                    f'<span class="pasillo-cat-empty">{int(r["vacias"]):,}</span>'
-                    f'<span class="pasillo-cat-occupied">{int(r["ocupadas"]):,}</span>'
-                    f'</div>'
-                ).replace(",", ".")
-
-            col.markdown(
-                f'<div class="pasillo-card pasillo-card-detalle">'
-                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
-                f'<div class="pasillo-cat-head">'
-                f'<span></span><span>VACÍAS</span><span>OCUPADAS</span>'
-                f'</div>'
-                f'{filas}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            col.markdown(
-                f'<div class="pasillo-card">'
-                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
-                f'<div class="pasillo-stats">'
-                f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
-                f'<p>VACÍAS</p></div>'
-                f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
-                f'<p>OCUPADAS</p></div>'
-                f'</div></div>'.replace(",", "."),
-                unsafe_allow_html=True,
-            )
-
-    TARJETAS_POR_FILA = 7
-    pasillos_lista = list(gp.index)
-    for i in range(0, len(pasillos_lista), TARJETAS_POR_FILA):
-        fila = pasillos_lista[i:i + TARJETAS_POR_FILA]
-        cols_fila = st.columns(TARJETAS_POR_FILA)
-        for col, pasillo in zip(cols_fila, fila):
-            pasillo_card(
-                col, pasillo,
-                int(gp.loc[pasillo, "disponibles"]),
-                int(gp.loc[pasillo, "ocupadas"]),
-            )
-
-    st.write("")
+    # =========================================================================
+    # SECCIÓN DE LA IMAGEN 2 (AHORA ARRIBA): BODEGAS, TREEMAP Y HEATMAP
+    # =========================================================================
     c1, c2 = st.columns(2)
 
     with c1:
@@ -781,10 +579,6 @@ def render_almacenamiento(
             .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
             .sort_values("pct")
         )
-        # Degradado continuo verde→ámbar→rojo (en vez de 3 bloques fijos):
-        # con esto, valores parecidos (ej. 74%-89%, todos "Atención") se
-        # siguen viendo diferenciados entre sí en vez de un bloque plano
-        # del mismo color, que es lo que se veía anticuado.
         colores_bodega = sample_colorscale(
             [[0.0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1.0, COLOR_ROJO]],
             [min(max(v / 100, 0), 1) for v in g["pct"]],
@@ -866,12 +660,6 @@ def render_almacenamiento(
     st.write("")
     st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
 
-    # ----------------------------------------------------------------------
-    # Heatmap Nivel x Pasillo
-    # ----------------------------------------------------------------------
-    # Se usa un eje NUMÉRICO para forzar la visualización de los niveles 1-7,
-    # incluso cuando el nivel 7 no tiene registros bajo los filtros activos.
-    # En pantalla se muestran solamente las letras de los pasillos.
     def nivel_numero(v):
         if pd.isna(v):
             return None
@@ -892,7 +680,6 @@ def render_almacenamiento(
         key=lambda x: (0, int(float(x))) if str(x).replace('.', '', 1).isdigit() else (1, str(x))
     )
 
-    # Porcentaje por combinación Nivel/Pasillo.
     piv_base = (
         df_heat.pivot_table(
             index="NIVEL_NUM", columns="PASILLO",
@@ -902,7 +689,6 @@ def render_almacenamiento(
 
     piv = piv_base.copy()
 
-    # Matrices auxiliares para el tooltip.
     total_base = (
         df_heat.pivot_table(
             index="NIVEL_NUM", columns="PASILLO",
@@ -934,8 +720,6 @@ def render_almacenamiento(
             ])
         customdata.append(row)
 
-    # Ejes numéricos: esto evita que Plotly elimine el Nivel 7 cuando toda
-    # su fila está vacía/NaN. Las etiquetas visibles siguen siendo amigables.
     x_positions = list(range(len(piv.columns)))
     y_positions = list(range(1, 8))
 
@@ -986,7 +770,6 @@ def render_almacenamiento(
         )
     )
 
-    # Agregamos la letra del pasillo al customdata sin alterar el resto.
     for i in range(len(customdata)):
         for j in range(len(customdata[i])):
             customdata[i][j].append(str(piv.columns[j]))
@@ -1004,7 +787,6 @@ def render_almacenamiento(
             side="top",
             tickmode="array",
             tickvals=x_positions,
-            # Solo la letra del pasillo: A, B, C... N.
             ticktext=[str(c).strip() for c in piv.columns],
             tickangle=0,
             tickfont=dict(size=12, color="#E2E8F0"),
@@ -1039,10 +821,158 @@ def render_almacenamiento(
     )
 
     st.caption(
-        "🟢 Saludable (<70%) · 🟡 Atención (70-90%) · 🔴 Crítico (>90%). "
-        "La columna/fila **Total** se calcula como Ubicaciones ocupadas ÷ "
-        "Ubicaciones totales, según los filtros activos."
+        "🟢 Saludable (<70%) · 🟡 Atención (70-90%) · 🔴 Crítico (>90%)."
     )
+
+    st.write("")
+
+    # =========================================================================
+    # SECCIÓN DE LA IMAGEN 1 (AHORA ABAJO): RESUMEN TOTAL Y POR PASILLO
+    # =========================================================================
+    st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
+    fig_total = go.Figure()
+    fig_total.add_trace(
+        go.Bar(
+            x=[ocupadas], y=["Ubicaciones"], orientation="h",
+            name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
+            text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
+            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
+            hovertemplate="Ocupadas: %{x:,.0f}<extra></extra>",
+        )
+    )
+    fig_total.add_trace(
+        go.Bar(
+            x=[disponibles], y=["Ubicaciones"], orientation="h",
+            name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
+            text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
+            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
+            hovertemplate="Disponibles: %{x:,.0f}<extra></extra>",
+        )
+    )
+    fig_total.update_layout(
+        **BASE_LAYOUT,
+        barmode="stack", height=110, bargap=0.55,
+        margin=dict(l=10, r=10, t=10, b=10),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.15, x=0,
+                     bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(visible=False), yaxis=dict(visible=False),
+    )
+    st.plotly_chart(fig_total, use_container_width=True)
+
+    st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
+    gp = (
+        df.groupby("PASILLO")
+        .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
+        .reindex(sorted(df["PASILLO"].unique()))
+    )
+    gp["total"] = gp["ocupadas"] + gp["disponibles"]
+
+    fig_pas = go.Figure()
+    fig_pas.add_trace(
+        go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
+               marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
+               text=gp["ocupadas"], textposition="inside",
+               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
+               hovertemplate="Pasillo %{x}<br>Ocupadas: %{y:,.0f}<extra></extra>")
+    )
+    fig_pas.add_trace(
+        go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
+               marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
+               text=gp["disponibles"].replace(0, ""), textposition="inside",
+               textfont=dict(color="#0B1220", family=PLOTLY_FONT_FAMILY),
+               hovertemplate="Pasillo %{x}<br>Disponibles: %{y:,.0f}<extra></extra>")
+    )
+    for pasillo, row in gp.iterrows():
+        fig_pas.add_annotation(
+            x=pasillo, y=row["total"], text=f"{int(row['total'])}",
+            showarrow=False, yshift=14,
+            font=dict(size=11, color=COLOR_TEXT_MUTED, family=PLOTLY_FONT_FAMILY),
+        )
+    fig_pas.update_layout(
+        **BASE_LAYOUT,
+        barmode="stack", height=380, bargap=0.32,
+        margin=dict(l=10, r=10, t=30, b=10),
+        xaxis=dict(title="Pasillo", showgrid=False, linecolor=COLOR_GRID),
+        yaxis=dict(title="Ubicaciones", showgrid=True, gridcolor=COLOR_GRID,
+                    zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                     bgcolor="rgba(0,0,0,0)"),
+    )
+    st.plotly_chart(fig_pas, use_container_width=True)
+
+    st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
+
+    def pasillo_card(col, pasillo, vacias, ocupadas):
+        if str(pasillo) in ("A", "B"):
+            sub = df[df["PASILLO"].astype(str).str.strip() == str(pasillo)].copy()
+            if "Bodega" in sub.columns:
+                detalle = (
+                    sub.groupby("Bodega", dropna=False)
+                    .agg(
+                        vacias=("VACIAS", "sum"),
+                        ocupadas=("OCUPADA", "sum"),
+                    )
+                    .reset_index()
+                )
+                detalle["Bodega"] = detalle["Bodega"].fillna("SIN CATEGORÍA").astype(str)
+                detalle = detalle.sort_values("Bodega")
+            else:
+                detalle = pd.DataFrame(columns=["Bodega", "vacias", "ocupadas"])
+
+            nombres = {
+                "COSMETICO": "COSMÉTICO",
+                "DISP.MEDICOS": "DISP. MÉDICOS",
+                "INFLAMABLE": "INFLAMABLE",
+                "ALIMENTO": "ALIMENTO",
+                "ALTILLO": "ALTILLO",
+            }
+
+            filas = ""
+            for _, r in detalle.iterrows():
+                categoria = nombres.get(str(r["Bodega"]).strip(), str(r["Bodega"]).strip())
+                filas += (
+                    f'<div class="pasillo-cat-row">'
+                    f'<span class="pasillo-cat-name">{categoria}</span>'
+                    f'<span class="pasillo-cat-empty">{int(r["vacias"]):,}</span>'
+                    f'<span class="pasillo-cat-occupied">{int(r["ocupadas"]):,}</span>'
+                    f'</div>'
+                ).replace(",", ".")
+
+            col.markdown(
+                f'<div class="pasillo-card pasillo-card-detalle">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-cat-head">'
+                f'<span></span><span>VACÍAS</span><span>OCUPADAS</span>'
+                f'</div>'
+                f'{filas}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            col.markdown(
+                f'<div class="pasillo-card">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-stats">'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
+                f'<p>VACÍAS</p></div>'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
+                f'<p>OCUPADAS</p></div>'
+                f'</div></div>'.replace(",", "."),
+                unsafe_allow_html=True,
+            )
+
+    TARJETAS_POR_FILA = 7
+    pasillos_lista = list(gp.index)
+    for i in range(0, len(pasillos_lista), TARJETAS_POR_FILA):
+        fila = pasillos_lista[i:i + TARJETAS_POR_FILA]
+        cols_fila = st.columns(TARJETAS_POR_FILA)
+        for col, pasillo in zip(cols_fila, fila):
+            pasillo_card(
+                col, pasillo,
+                int(gp.loc[pasillo, "disponibles"]),
+                int(gp.loc[pasillo, "ocupadas"]),
+            )
 
     st.write("")
     st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
@@ -1076,12 +1006,6 @@ def render_almacenamiento(
     elif estado_tabla == "Disponibles":
         df_detalle = df_detalle[~df_detalle["OCUPADA"]]
 
-    # Se ocultan ALMACENAMIENTO y OBSERVACIONES: son las columnas crudas del
-    # Excel que casi siempre vienen vacías (se ven como "None"); su
-    # información resumida ya está en ALMACENAMIENTO_FLAG y ES_RECETARIO.
-    # VACIAS, OCUPADA y Par se muestran como palabras ("Vacía"/"Con stock",
-    # "Ocupada"/"Disponible", "Sí"/"No") en vez de casillas ✓, para que sea
-    # más fácil de leer de un vistazo.
     df_detalle = df_detalle.drop(columns=["ALMACENAMIENTO", "OBSERVACIONES"], errors="ignore")
     if "VACIAS" in df_detalle.columns:
         df_detalle["VACIAS"] = df_detalle["VACIAS"].apply(
@@ -1102,12 +1026,7 @@ def render_almacenamiento(
 
 
 def render_stock(df_stock_raw):
-    """Renderiza el dashboard de Stock / Fecha de Caducidad (pestaña 2).
-
-    Portado tal cual desde el dashboard "Medcell Operaciones" (hoja STOCK),
-    adaptado para funcionar de forma independiente (sin loop de pestañas ni
-    diccionario resumen_data).
-    """
+    """Renderiza el dashboard de Stock / Fecha de Caducidad (pestaña 2)."""
     df = df_stock_raw.copy()
 
     st.markdown("### 📦 Dashboard de Fecha de Caducidad")
@@ -1167,7 +1086,7 @@ def render_stock(df_stock_raw):
         (c for c in df.columns if "descripcion" in c.lower()), None
     )
     if not col_desc_stock and len(df.columns) > 3:
-      col_desc_stock = df.columns[3]  # Columna D
+      col_desc_stock = df.columns[3]
     col_fecha = next(
         (
             c
@@ -1194,19 +1113,12 @@ def render_stock(df_stock_raw):
     if col_cod and col_cod in df.columns:
       df[col_cod] = df[col_cod].apply(fmt_code)
 
-    # ---------------------------------------------------------------
-    # SKU (columnas B y C de la propia hoja STOCK)
-    # La hoja STOCK ya trae: A=codigo_articulo, B=codigo_sb, C=codigo_pu.
-    # No hace falta cruzar con ninguna otra hoja: se usan directo.
-    # ---------------------------------------------------------------
     col_sku_sb = next(
         (c for c in df.columns if c.strip().lower() == "codigo_sb"), None
     )
     col_sku_pu = next(
         (c for c in df.columns if c.strip().lower() == "codigo_pu"), None
     )
-    # Respaldo por posición: si por algún motivo no calzan los nombres,
-    # se usan la columna B (índice 1) y C (índice 2) tal cual.
     if not col_sku_sb and len(df.columns) > 1:
       col_sku_sb = df.columns[1]
     if not col_sku_pu and len(df.columns) > 2:
@@ -1246,8 +1158,6 @@ def render_stock(df_stock_raw):
 
     col_dash1, col_dash2 = st.columns([1, 2.3])
 
-    # Filtros de STOCK: Código, SKU SB (columna B) y SKU PU (columna C).
-    # Son mutuamente excluyentes: al elegir uno, los otros dos vuelven a "Todos".
     key_codigo = f"sel_codigo_stock"
     key_sku_sb = f"sel_sku_sb_stock"
     key_sku_pu = f"sel_sku_pu_stock"
@@ -1258,7 +1168,6 @@ def render_stock(df_stock_raw):
           st.session_state[k] = "Todos"
 
     with col_dash2:
-      # Los filtros se centran dejando márgenes livianos a los costados.
       _pad_izq, filtro_codigo_col, filtro_sku_sb_col, filtro_sku_pu_col, _pad_der = (
           st.columns([0.3, 1, 1, 1, 0.3])
       )
@@ -1327,7 +1236,6 @@ def render_stock(df_stock_raw):
     else:
       prod_sel = "Seleccione..."
 
-
     if col_cant:
       total_unidades = df_dash[col_cant].sum()
       total_vencido = df_dash[
@@ -1355,8 +1263,6 @@ def render_stock(df_stock_raw):
           df_dash[df_dash["Alerta_Caducidad"] == "Vigente (> 13m)"]
       )
 
-    # % de Stock Crítico: unidades ya vencidas + que vencen en menos de 6 meses,
-    # sobre el total de unidades registradas (con la selección de filtros activa).
     total_critico = total_vencido + total_menos_6m
     pct_critico = (
         (total_critico / total_unidades * 100) if total_unidades > 0 else 0.0
@@ -1385,8 +1291,6 @@ def render_stock(df_stock_raw):
         unsafe_allow_html=True,
     )
 
-    # Filtro por categoría de caducidad: un selector simple y confiable
-    # (los botones coloreados con CSS no se pintaban bien en todos los casos).
     label_map_alerta = {
         "Todos": "Todos",
         "Vencido": "Vencido",
@@ -1403,8 +1307,6 @@ def render_stock(df_stock_raw):
     )
     filtro_actual = label_map_alerta[etiqueta_sel]
 
-    # df_dash filtrado por la categoría de caducidad seleccionada arriba.
-    # Se usa en las secciones de abajo (localizadores, estado de lote, detalle).
     if filtro_actual != "Todos":
       df_dash_alerta = df_dash[df_dash["Alerta_Caducidad"] == filtro_actual].copy()
     else:
@@ -1463,8 +1365,6 @@ def render_stock(df_stock_raw):
 
       total_donut = sum(values)
       if total_donut > 0:
-        # Texto propio con 2 decimales para que los segmentos muy chicos
-        # (ej. 0.00%) también se alcancen a leer bien, afuera de la dona.
         textos_pct = [
             f"{lbl}<br>{(v / total_donut * 100):.2f}%"
             for lbl, v in zip(labels, values)
@@ -1497,8 +1397,6 @@ def render_stock(df_stock_raw):
                 yanchor="top",
             ),
         )
-        # Se centra el gráfico dentro de la columna para que no quede
-        # estirado a lo ancho ni deje espacio vacío desbalanceado.
         _pad_chart_izq, col_chart, _pad_chart_der = st.columns([0.3, 2, 0.3])
         with col_chart:
           st.plotly_chart(
@@ -1646,8 +1544,6 @@ def render_stock(df_stock_raw):
 
     st.divider()
 
-    # TOP LOCALIZADORES CON MÁS STOCK POR VENCER (Vencido + < 6 meses,
-    # o la categoría seleccionada en las tarjetas de arriba).
     if col_loc and col_loc in df_dash.columns:
       if filtro_actual != "Todos":
         titulo_loc = f"##### 📍 Top Localizadores — {filtro_actual}"
@@ -1660,7 +1556,6 @@ def render_stock(df_stock_raw):
 
       st.markdown(titulo_loc)
 
-      # Se excluyen las filas sin localizador registrado.
       df_critico = df_critico[
           df_critico[col_loc].notna()
           & (df_critico[col_loc].astype(str).str.strip() != "")
@@ -1738,23 +1633,14 @@ def render_stock(df_stock_raw):
         )
       else:
         st.info(
-            "No hay stock (con localizador registrado) para la categoría"
-            " seleccionada."
+            "No hay stock (con localizador registrado) para la categoría seleccionada."
         )
 
 
-
 def render_escanear(df_stock_raw, hojas_disponibles):
-    """Renderiza la pestaña de escaneo de Localizador (pestaña 3).
-
-    Portada tal cual desde el dashboard "Medcell Operaciones".
-    hojas_disponibles: dict {nombre_hoja: DataFrame} usado como respaldo
-    para buscar una relación código -> Localizador en cualquier hoja
-    (ej. si escaneas un código de barras que no es un Localizador MCD
-    directamente).
-    """
+    """Renderiza la pestaña de escaneo de Localizador (pestaña 3)."""
     st.markdown("### 📷 Escanear Localizador")
-    st.caption("Apunta la cámara al texto MCD de la posición. Si el texto no se reconoce, el lector intenta también el código de barras.")
+    st.caption("Apunta la cámara al texto MCD de la posición.")
 
     video_scan_html = """
         <div style="position:relative; width:100%; max-height:320px; overflow:hidden;
@@ -1778,9 +1664,7 @@ def render_escanear(df_stock_raw, hojas_disponibles):
           Primero intentará reconocer el Localizador MCD directamente.
         </p>
 
-        <!-- Código de barras: se mantiene como respaldo -->
         <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
-        <!-- OCR: reconoce el texto visible MCD.0.3.G.4.120 -->
         <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
         <script>
           const estado = document.getElementById("estado-scan");
@@ -1800,12 +1684,9 @@ def render_escanear(df_stock_raw, hojas_disponibles):
             if (!texto) return null;
             let s = String(texto).toUpperCase();
             s = s.replace(/[\n\r\t]/g, " ");
-            // Corrige errores OCR habituales antes de buscar el patrón.
             s = s.replace(/[|]/g, "I");
             s = s.replace(/\s+/g, " ");
 
-            // El patrón real de las etiquetas es MCD.0.3.G.4.120, etc.
-            // Permitimos letras/números por segmento para soportar otras posiciones.
             const m = s.match(/MCD\s*[.\-\s]\s*\d+\s*[.\-\s]\s*\d+\s*[.\-\s]\s*[A-Z0-9]+\s*[.\-\s]\s*\d+\s*[.\-\s]\s*\d+/);
             if (!m) return null;
 
@@ -1813,7 +1694,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
               .replace(/\s+/g, "")
               .replace(/-/g, ".");
 
-            // Normaliza separadores repetidos y algunos errores comunes de OCR.
             loc = loc.replace(/\.\.+/g, ".");
             loc = loc.replace(/^MCD/i, "MCD");
 
@@ -1847,19 +1727,14 @@ def render_escanear(df_stock_raw, hojas_disponibles):
             if (yaEnvio || !codigo) return;
             const valor = String(codigo).trim();
 
-            // No aceptamos falsos positivos como B4B.
             if (!/^\d{8,14}$/.test(valor)) return;
 
-            // Si el lector de barras entrega directamente un Localizador, también sirve.
             const loc = normalizarLocalizador(valor);
             if (loc) {
               enviarValor(loc, "barcode");
               return;
             }
 
-            // Para códigos numéricos que no contienen el MCD, enviamos el número
-            // como loc SOLO como último recurso. La lógica Python resolverá una
-            // equivalencia si existe en el Excel.
             yaEnvio = true;
             estado.textContent = "✅ Código detectado: " + valor;
             detalle.textContent = "🔎 Buscando la relación código → Localizador...";
@@ -1899,7 +1774,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
                   continue;
                 }
 
-                // Captura principalmente la zona del recuadro verde.
                 const vw = video.videoWidth;
                 const vh = video.videoHeight;
                 const cropW = Math.floor(vw * 0.82);
@@ -1918,9 +1792,7 @@ def render_escanear(df_stock_raw, hojas_disponibles):
                     enviarValor(loc, "ocr");
                     break;
                   }
-                } catch (e) {
-                  // OCR puede fallar en un fotograma; continuamos con el siguiente.
-                }
+                } catch (e) {}
 
                 if (!yaEnvio) {
                   estado.textContent = "📷 Buscando Localizador MCD...";
@@ -1957,7 +1829,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
                 }
               } catch (e) {}
 
-              // Iniciamos OCR sin bloquear el lector de barras.
               iniciarOCR();
             } catch (e) {
               mostrarError("❌ No se pudo acceder a la cámara: " + (e.message || e));
@@ -1982,9 +1853,7 @@ def render_escanear(df_stock_raw, hojas_disponibles):
                 if (!result || yaEnvio) return;
                 enviarCodigoBarras(result.getText());
               });
-            } catch (e) {
-              // OCR continúa siendo el método principal.
-            }
+            } catch (e) {}
           }
 
           torchBtn.onclick = function() {
@@ -2025,20 +1894,12 @@ def render_escanear(df_stock_raw, hojas_disponibles):
       if st.button("📷 Activar cámara y escanear", key="btn_activar_scan", use_container_width=True):
         st.session_state["mc_scan_activo"] = True
         st.rerun()
-      st.info(
-          "La cámara, el lector de código de barras y el OCR solo se cargan "
-          "cuando presionas el botón de arriba. Antes se cargaban automáticamente "
-          "en CADA carga de la app (aunque estuvieras en otra pestaña), lo que "
-          "sumaba varios segundos de descarga de librerías y podía bloquear la "
-          "carga inicial si el navegador rechazaba el acceso a la cámara."
-      )
+      st.info("Presiona el botón superior para activar la cámara y el escáner.")
     else:
       components.html(video_scan_html, height=430)
 
     st.caption(
-        "💡 Recomendado: centra el texto MCD.0.3.G.x.xxx dentro del recuadro verde, "
-        "a unos 10-20 cm. El sistema intenta reconocer primero el Localizador visible "
-        "y usa el código de barras como respaldo."
+        "💡 Recomendado: centra el texto MCD.0.3.G.x.xxx dentro del recuadro verde."
     )
 
     with st.expander("⌨️ ¿No lee el código? Ingresa el Localizador manualmente", expanded=True):
@@ -2047,9 +1908,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
       )
       buscar_click = st.button("Buscar", key="btn_buscar_manual")
 
-    # Resuelve el Localizador a usar en esta misma ejecución: prioriza el
-    # ingreso manual recién enviado; si no, usa el que venga de la cámara
-    # (parámetro de URL). Evita depender de un segundo round-trip de rerun.
     loc_query = st.query_params.get("loc", None)
     loc_escaneado = None
     if buscar_click and loc_manual.strip():
@@ -2102,9 +1960,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
         if not col_loc_scan:
           st.error("La hoja STOCK no tiene columna de Localizador reconocible.")
         else:
-          # ================================================================
-          # RESOLUCIÓN CÓDIGO DE BARRAS -> LOCALIZADOR
-          # ================================================================
           def _norm_scan_value(v):
               if v is None or pd.isna(v):
                   return ""
@@ -2124,7 +1979,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
           localizadores_encontrados = []
           hoja_mapeo = None
 
-          # Respaldo para las etiquetas probadas.
           MAPEO_PRUEBA = {
               "9631187073887": "MCD.0.3.G.2.120",
               "11111283": "MCD.0.3.G.4.120",
@@ -2146,8 +2000,6 @@ def render_escanear(df_stock_raw, hojas_disponibles):
                   df_stock_scan[col_loc_scan].apply(_norm_scan_value).isin(loc_norms)
               ].copy()
 
-          # Busca códigos en todas las hojas para encontrar una relación
-          # código -> Localizador si existe en el Excel.
           if resultado.empty and scan_norm:
               for nombre_hoja, df_mapeo in hojas_disponibles.items():
                   if df_mapeo is None or not hasattr(df_mapeo, "columns"):
@@ -2201,18 +2053,12 @@ def render_escanear(df_stock_raw, hojas_disponibles):
 
           if localizadores_encontrados and not resultado.empty:
               loc_mostrado = ", ".join(localizadores_encontrados)
-              if hoja_mapeo and hoja_mapeo != "STOCK":
-                  st.success(f"📍 Localizador detectado: **{loc_mostrado}**")
-              else:
-                  st.success(f"📍 Localizador: **{loc_mostrado}**")
+              st.success(f"📍 Localizador: **{loc_mostrado}**")
           elif scan_norm:
               st.warning(
                   f"⚠️ Se detectó **{loc_escaneado}**, pero no encontré ese Localizador ni una relación código → Localizador en el Excel."
               )
 
-          # ================================================================
-          # MOSTRAR LOS PRODUCTOS: MISMA LÓGICA QUE LA BÚSQUEDA MANUAL
-          # ================================================================
           if resultado.empty:
             st.warning("No se encontró ningún producto registrado en esa posición.")
           else:
