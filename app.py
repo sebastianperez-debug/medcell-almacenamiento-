@@ -777,12 +777,17 @@ def render_almacenamiento(
                 tickfont=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
                 outlinewidth=0,
             ),
-            customdata=np.dstack([vacias_piv.values, total_piv.values]),
+            customdata=np.stack((vacias_piv.to_numpy(dtype=float), total_piv.to_numpy(dtype=float)), axis=-1),
             hovertemplate=(
-                "Nivel %{y} · Pasillo %{x}<br>"
+                "<b>Nivel %{y} · Pasillo %{x}</b><br>"
                 "Ocupación: %{z:.1f}%<br>"
-                "Posiciones vacías: %{customdata[0]:,.0f}<br>"
-                "Posiciones totales: %{customdata[1]:,.0f}<extra></extra>"
+                "<b>Posiciones vacías: %{customdata[0]:.0f}</b><br>"
+                "Posiciones totales: %{customdata[1]:.0f}<extra></extra>"
+            ),
+            hoverlabel=dict(
+                bgcolor="#FFFFFF",
+                bordercolor="#334155",
+                font=dict(color="#0F172A", size=14, family=PLOTLY_FONT_FAMILY),
             ),
         )
     )
