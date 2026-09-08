@@ -401,186 +401,180 @@ with st.expander("📭 Ver y descargar solo ubicaciones vacías", expanded=False
 
 st.write("")
 
-
-tab_resumen, tab_bodega, tab_pasillo_nivel = st.tabs(
-    ["📊 Resumen general", "🏬 Por bodega", "🧭 Pasillo y nivel"]
+# ----------------------------------------------------------------------
+# Todo el contenido en una sola vista (sin tabs), en orden lógico:
+# resumen -> por pasillo -> por bodega -> nivel/pasillo -> detalle
+# ----------------------------------------------------------------------
+st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
+fig_total = go.Figure()
+fig_total.add_trace(
+    go.Bar(
+        x=[ocupadas], y=["Ubicaciones"], orientation="h",
+        name="Ocupadas", marker_color=COLOR_OCUPADA,
+        text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
+    )
 )
+fig_total.add_trace(
+    go.Bar(
+        x=[disponibles], y=["Ubicaciones"], orientation="h",
+        name="Disponibles", marker_color=COLOR_DISPONIBLE,
+        text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
+    )
+)
+fig_total.update_layout(
+    barmode="stack", height=110,
+    margin=dict(l=10, r=10, t=10, b=10),
+    showlegend=True,
+    legend=dict(orientation="h", yanchor="bottom", y=1.05, x=0),
+    xaxis=dict(visible=False), yaxis=dict(visible=False),
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E6E6E6"),
+)
+st.plotly_chart(fig_total, use_container_width=True)
 
-# ---------------- TAB 1: Resumen general ----------------
-with tab_resumen:
-    st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
-    fig_total = go.Figure()
-    fig_total.add_trace(
+st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
+gp = (
+    df.groupby("PASILLO")
+    .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
+    .reindex(sorted(df["PASILLO"].unique()))
+)
+gp["total"] = gp["ocupadas"] + gp["disponibles"]
+
+fig_pas = go.Figure()
+fig_pas.add_trace(
+    go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
+           marker_color=COLOR_OCUPADA, text=gp["ocupadas"], textposition="inside")
+)
+fig_pas.add_trace(
+    go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
+           marker_color=COLOR_DISPONIBLE,
+           text=gp["disponibles"].replace(0, ""), textposition="inside")
+)
+for pasillo, row in gp.iterrows():
+    fig_pas.add_annotation(
+        x=pasillo, y=row["total"], text=f"{int(row['total'])}",
+        showarrow=False, yshift=12, font=dict(size=11, color="#E6E6E6"),
+    )
+fig_pas.update_layout(
+    barmode="stack", height=380,
+    margin=dict(l=10, r=10, t=30, b=10),
+    xaxis_title="Pasillo", yaxis_title="Ubicaciones",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E6E6E6"),
+)
+st.plotly_chart(fig_pas, use_container_width=True)
+
+st.write("")
+c1, c2 = st.columns(2)
+
+with c1:
+    st.markdown('<p class="section-title">% Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
+    g = (
+        df.groupby("Bodega")
+        .agg(total=("LOCALIZADOR", "count"), ocupadas=("OCUPADA", "sum"))
+        .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
+        .sort_values("pct")
+    )
+    colores_bodega = [semaforo_color(v) for v in g["pct"]]
+    fig_pct = go.Figure(
         go.Bar(
-            x=[ocupadas], y=["Ubicaciones"], orientation="h",
-            name="Ocupadas", marker_color=COLOR_OCUPADA,
-            text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
+            x=g["pct"], y=g.index, orientation="h",
+            marker_color=colores_bodega,
+            text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
         )
     )
-    fig_total.add_trace(
-        go.Bar(
-            x=[disponibles], y=["Ubicaciones"], orientation="h",
-            name="Disponibles", marker_color=COLOR_DISPONIBLE,
-            text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
-        )
-    )
-    fig_total.update_layout(
-        barmode="stack", height=110,
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, x=0),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
+    fig_pct.update_layout(
+        height=280, margin=dict(l=10, r=40, t=10, b=10),
+        xaxis=dict(visible=False),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#E6E6E6"),
     )
-    st.plotly_chart(fig_total, use_container_width=True)
+    st.plotly_chart(fig_pct, use_container_width=True)
 
-    st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
-    gp = (
-        df.groupby("PASILLO")
+with c2:
+    st.markdown('<p class="section-title">Ocupadas vs. disponibles por bodega</p>', unsafe_allow_html=True)
+    g2 = (
+        df.groupby("Bodega")
         .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-        .reindex(sorted(df["PASILLO"].unique()))
+        .sort_values("ocupadas")
     )
-    gp["total"] = gp["ocupadas"] + gp["disponibles"]
-
-    fig_pas = go.Figure()
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["ocupadas"], name="Ocupadas",
-               marker_color=COLOR_OCUPADA, text=gp["ocupadas"], textposition="inside")
+    fig_bd = go.Figure()
+    fig_bd.add_trace(
+        go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
+               name="Ocupadas", marker_color=COLOR_OCUPADA,
+               text=g2["ocupadas"], textposition="outside")
     )
-    fig_pas.add_trace(
-        go.Bar(x=gp.index, y=gp["disponibles"], name="Disponibles",
-               marker_color=COLOR_DISPONIBLE,
-               text=gp["disponibles"].replace(0, ""), textposition="inside")
+    fig_bd.add_trace(
+        go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
+               name="Disponibles", marker_color=COLOR_DISPONIBLE,
+               text=g2["disponibles"], textposition="outside")
     )
-    for pasillo, row in gp.iterrows():
-        fig_pas.add_annotation(
-            x=pasillo, y=row["total"], text=f"{int(row['total'])}",
-            showarrow=False, yshift=12, font=dict(size=11, color="#E6E6E6"),
-        )
-    fig_pas.update_layout(
-        barmode="stack", height=380,
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis_title="Pasillo", yaxis_title="Ubicaciones",
+    fig_bd.update_layout(
+        barmode="group", height=280,
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis=dict(visible=False),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#E6E6E6"),
     )
-    st.plotly_chart(fig_pas, use_container_width=True)
+    st.plotly_chart(fig_bd, use_container_width=True)
 
-    st.write("")
-    st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, height=320)
+st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
+g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
+fig_tree = px.treemap(
+    g3, path=["Bodega"], values="cantidad",
+    color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_2],
+)
+fig_tree.update_layout(
+    height=320, margin=dict(l=10, r=10, t=10, b=10),
+    paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#E6E6E6"),
+    coloraxis_showscale=False,
+)
+st.plotly_chart(fig_tree, use_container_width=True)
 
-# ---------------- TAB 2: Por bodega ----------------
-with tab_bodega:
-    c1, c2 = st.columns(2)
+st.write("")
+st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
+piv = df.pivot_table(
+    index="NIVEL", columns="PASILLO", values="OCUPADA", aggfunc="mean"
+) * 100
+piv = piv.reindex(sorted(piv.index, key=lambda x: int(x)))
+piv = piv[sorted(piv.columns)]
 
-    with c1:
-        st.markdown('<p class="section-title">% Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
-        g = (
-            df.groupby("Bodega")
-            .agg(total=("LOCALIZADOR", "count"), ocupadas=("OCUPADA", "sum"))
-            .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
-            .sort_values("pct")
-        )
-        colores_bodega = [semaforo_color(v) for v in g["pct"]]
-        fig_pct = go.Figure(
-            go.Bar(
-                x=g["pct"], y=g.index, orientation="h",
-                marker_color=colores_bodega,
-                text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
-            )
-        )
-        fig_pct.update_layout(
-            height=280, margin=dict(l=10, r=40, t=10, b=10),
-            xaxis=dict(visible=False),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#E6E6E6"),
-        )
-        st.plotly_chart(fig_pct, use_container_width=True)
+nivel_totales = df.groupby("NIVEL")["OCUPADA"].mean() * 100
+piv["Total"] = nivel_totales.reindex(piv.index)
 
-    with c2:
-        st.markdown('<p class="section-title">Ocupadas vs. disponibles por bodega</p>', unsafe_allow_html=True)
-        g2 = (
-            df.groupby("Bodega")
-            .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-            .sort_values("ocupadas")
-        )
-        fig_bd = go.Figure()
-        fig_bd.add_trace(
-            go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
-                   name="Ocupadas", marker_color=COLOR_OCUPADA,
-                   text=g2["ocupadas"], textposition="outside")
-        )
-        fig_bd.add_trace(
-            go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
-                   name="Disponibles", marker_color=COLOR_DISPONIBLE,
-                   text=g2["disponibles"], textposition="outside")
-        )
-        fig_bd.update_layout(
-            barmode="group", height=280,
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis=dict(visible=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#E6E6E6"),
-        )
-        st.plotly_chart(fig_bd, use_container_width=True)
+pasillo_totales = df.groupby("PASILLO")["OCUPADA"].mean() * 100
+fila_total = pasillo_totales.reindex(piv.columns[:-1])
+fila_total["Total"] = df["OCUPADA"].mean() * 100
+piv.loc["Total"] = fila_total
 
-    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
-    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
-    fig_tree = px.treemap(
-        g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_2],
+text_vals = piv.round(1).astype(str) + "%"
+
+fig_heat = go.Figure(
+    data=go.Heatmap(
+        z=piv.values, x=piv.columns, y=piv.index,
+        colorscale=[[0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1, COLOR_ROJO]],
+        text=text_vals.values, texttemplate="%{text}",
+        showscale=True, xgap=2, ygap=2,
+        colorbar=dict(title="%", tickfont=dict(color="#E6E6E6")),
     )
-    fig_tree.update_layout(
-        height=320, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#E6E6E6"),
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig_tree, use_container_width=True)
+)
+fig_heat.update_layout(
+    height=380, margin=dict(l=10, r=10, t=10, b=10),
+    yaxis=dict(autorange="reversed", title="Nivel"),
+    xaxis=dict(title="Pasillo", side="top"),
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#E6E6E6"),
+)
+st.plotly_chart(fig_heat, use_container_width=True)
 
-# ---------------- TAB 3: Pasillo y nivel ----------------
-with tab_pasillo_nivel:
-    st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
-    piv = df.pivot_table(
-        index="NIVEL", columns="PASILLO", values="OCUPADA", aggfunc="mean"
-    ) * 100
-    piv = piv.reindex(sorted(piv.index, key=lambda x: int(x)))
-    piv = piv[sorted(piv.columns)]
+st.caption(
+    "🟢 Saludable (<70%) · 🟡 Atención (70-90%) · 🔴 Crítico (>90%). "
+    "La columna/fila **Total** se calcula como Ubicaciones ocupadas ÷ "
+    "Ubicaciones totales, según los filtros activos."
+)
 
-    nivel_totales = df.groupby("NIVEL")["OCUPADA"].mean() * 100
-    piv["Total"] = nivel_totales.reindex(piv.index)
-
-    pasillo_totales = df.groupby("PASILLO")["OCUPADA"].mean() * 100
-    fila_total = pasillo_totales.reindex(piv.columns[:-1])
-    fila_total["Total"] = df["OCUPADA"].mean() * 100
-    piv.loc["Total"] = fila_total
-
-    text_vals = piv.round(1).astype(str) + "%"
-
-    fig_heat = go.Figure(
-        data=go.Heatmap(
-            z=piv.values, x=piv.columns, y=piv.index,
-            colorscale=[[0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1, COLOR_ROJO]],
-            text=text_vals.values, texttemplate="%{text}",
-            showscale=True, xgap=2, ygap=2,
-            colorbar=dict(title="%", tickfont=dict(color="#E6E6E6")),
-        )
-    )
-    fig_heat.update_layout(
-        height=380, margin=dict(l=10, r=10, t=10, b=10),
-        yaxis=dict(autorange="reversed", title="Nivel"),
-        xaxis=dict(title="Pasillo", side="top"),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E6E6E6"),
-    )
-    st.plotly_chart(fig_heat, use_container_width=True)
-
-    st.caption(
-        "🟢 Saludable (<70%) · 🟡 Atención (70-90%) · 🔴 Crítico (>90%). "
-        "La columna/fila **Total** se calcula como Ubicaciones ocupadas ÷ "
-        "Ubicaciones totales, según los filtros activos."
-    )
-
+st.write("")
+st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
+st.dataframe(df, use_container_width=True, height=320)
