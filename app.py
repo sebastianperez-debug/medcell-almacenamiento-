@@ -56,11 +56,11 @@ DATA_PATH = "data/Almacenamiento_2026.xlsx"
 
 CSS = f"""
 <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {{
         background-color: #0B0F17 !important;
         color: #E2E8F0 !important;
-    }
-    [data-testid="stHeader"] { background-color: #0B0F17 !important; }
+    }}
+    [data-testid="stHeader"] {{ background-color: #0B0F17 !important; }}
     /* Tarjetas KPI */
     .metric-card {{
         background-color:{COLOR_CARD_BG};
