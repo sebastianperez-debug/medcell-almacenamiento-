@@ -16,6 +16,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ----------------------------------------------------------------------
 # Configuración de página y paleta de colores
@@ -703,10 +704,6 @@ def render_stock(df_stock_raw):
     """
     df = df_stock_raw.copy()
 
-    with st.expander("🔧 Diagnóstico de columnas (temporal, quitar después)", expanded=False):
-        st.write("Columnas detectadas en la hoja STOCK:", list(df.columns))
-        st.dataframe(df.head(5), use_container_width=True)
-
     st.markdown("### 📦 Dashboard de Fecha de Caducidad")
 
     col_cod = next(
@@ -1341,11 +1338,521 @@ def render_stock(df_stock_raw):
 
 
 
+def render_escanear(df_stock_raw, hojas_disponibles):
+    """Renderiza la pestaña de escaneo de Localizador (pestaña 3).
+
+    Portada tal cual desde el dashboard "Medcell Operaciones".
+    hojas_disponibles: dict {nombre_hoja: DataFrame} usado como respaldo
+    para buscar una relación código -> Localizador en cualquier hoja
+    (ej. si escaneas un código de barras que no es un Localizador MCD
+    directamente).
+    """
+    st.markdown("### 📷 Escanear Localizador")
+    st.caption("Apunta la cámara al texto MCD de la posición. Si el texto no se reconoce, el lector intenta también el código de barras.")
+
+    video_scan_html = """
+        <div style="position:relative; width:100%; max-height:320px; overflow:hidden;
+                    border-radius:8px; background:#000;">
+          <video id="video" style="width:100%; max-height:320px; object-fit:cover;
+                 display:block;" muted playsinline autoplay></video>
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+                      width:82%; height:105px; border:3px solid #00e676; border-radius:6px;
+                      box-shadow:0 0 0 2000px rgba(0,0,0,0.35); pointer-events:none;"></div>
+        </div>
+        <div style="text-align:center; margin-top:10px; display:flex; gap:8px; justify-content:center;">
+          <button id="btn-torch" style="background:#0070f3; color:#fff; border:none;
+                  border-radius:8px; padding:8px 16px; font-weight:600; cursor:pointer;">
+            💡 Linterna
+          </button>
+        </div>
+        <p id="estado-scan" style="color:#888; font-size:13px; text-align:center; margin-top:6px;">
+          🎥 Activando cámara...
+        </p>
+        <p id="detalle-scan" style="color:#666; font-size:12px; text-align:center; margin:0 8px;">
+          Primero intentará reconocer el Localizador MCD directamente.
+        </p>
+
+        <!-- Código de barras: se mantiene como respaldo -->
+        <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+        <!-- OCR: reconoce el texto visible MCD.0.3.G.4.120 -->
+        <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+        <script>
+          const estado = document.getElementById("estado-scan");
+          const detalle = document.getElementById("detalle-scan");
+          const video = document.getElementById("video");
+          const torchBtn = document.getElementById("btn-torch");
+          let yaEnvio = false;
+          let streamActual = null;
+          let ocrWorker = null;
+          let ocrActivo = false;
+
+          function mostrarError(msg) {
+            estado.textContent = msg;
+          }
+
+          function normalizarLocalizador(texto) {
+            if (!texto) return null;
+            let s = String(texto).toUpperCase();
+            s = s.replace(/[\n\r\t]/g, " ");
+            // Corrige errores OCR habituales antes de buscar el patrón.
+            s = s.replace(/[|]/g, "I");
+            s = s.replace(/\s+/g, " ");
+
+            // El patrón real de las etiquetas es MCD.0.3.G.4.120, etc.
+            // Permitimos letras/números por segmento para soportar otras posiciones.
+            const m = s.match(/MCD\s*[.\-\s]\s*\d+\s*[.\-\s]\s*\d+\s*[.\-\s]\s*[A-Z0-9]+\s*[.\-\s]\s*\d+\s*[.\-\s]\s*\d+/);
+            if (!m) return null;
+
+            let loc = m[0]
+              .replace(/\s+/g, "")
+              .replace(/-/g, ".");
+
+            // Normaliza separadores repetidos y algunos errores comunes de OCR.
+            loc = loc.replace(/\.\.+/g, ".");
+            loc = loc.replace(/^MCD/i, "MCD");
+
+            if (/^MCD\.\d+\.\d+\.[A-Z0-9]+\.\d+\.\d+$/.test(loc)) {
+              return loc;
+            }
+            return null;
+          }
+
+          function enviarValor(valor, origen) {
+            if (yaEnvio || !valor) return;
+            const loc = normalizarLocalizador(valor);
+            if (!loc) return;
+
+            yaEnvio = true;
+            estado.textContent = "✅ Localizador detectado: " + loc;
+            detalle.textContent = origen === "ocr"
+              ? "🔎 Reconocido desde el texto de la etiqueta. Buscando productos..."
+              : "📦 Obtenido desde el código de barras. Buscando productos...";
+
+            try {
+              const url = new URL(window.parent.location.href);
+              url.searchParams.set("loc", loc);
+              window.parent.location.href = url.href;
+            } catch (e) {
+              window.location.href = "?loc=" + encodeURIComponent(loc);
+            }
+          }
+
+          function enviarCodigoBarras(codigo) {
+            if (yaEnvio || !codigo) return;
+            const valor = String(codigo).trim();
+
+            // No aceptamos falsos positivos como B4B.
+            if (!/^\d{8,14}$/.test(valor)) return;
+
+            // Si el lector de barras entrega directamente un Localizador, también sirve.
+            const loc = normalizarLocalizador(valor);
+            if (loc) {
+              enviarValor(loc, "barcode");
+              return;
+            }
+
+            // Para códigos numéricos que no contienen el MCD, enviamos el número
+            // como loc SOLO como último recurso. La lógica Python resolverá una
+            // equivalencia si existe en el Excel.
+            yaEnvio = true;
+            estado.textContent = "✅ Código detectado: " + valor;
+            detalle.textContent = "🔎 Buscando la relación código → Localizador...";
+            try {
+              const url = new URL(window.parent.location.href);
+              url.searchParams.set("loc", valor);
+              window.parent.location.href = url.href;
+            } catch (e) {
+              window.location.href = "?loc=" + encodeURIComponent(valor);
+            }
+          }
+
+          async function iniciarOCR() {
+            if (ocrActivo || typeof Tesseract === "undefined" || yaEnvio) return;
+            ocrActivo = true;
+            try {
+              detalle.textContent = "🔎 OCR activo: busca el texto MCD.0.3.G.x.xxx...";
+              ocrWorker = await Tesseract.createWorker("eng", 1, {
+                logger: function(m) {
+                  if (m.status === "recognizing text") {
+                    const pct = Math.round((m.progress || 0) * 100);
+                    estado.textContent = "🔎 Reconociendo Localizador... " + pct + "%";
+                  }
+                }
+              });
+              await ocrWorker.setParameters({
+                tessedit_char_whitelist: "MCD.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-",
+                preserve_interword_spaces: "0"
+              });
+
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d", {willReadFrequently:true});
+
+              while (!yaEnvio) {
+                if (!video.videoWidth || !video.videoHeight) {
+                  await new Promise(r => setTimeout(r, 700));
+                  continue;
+                }
+
+                // Captura principalmente la zona del recuadro verde.
+                const vw = video.videoWidth;
+                const vh = video.videoHeight;
+                const cropW = Math.floor(vw * 0.82);
+                const cropH = Math.floor(vh * 0.34);
+                const sx = Math.floor((vw - cropW) / 2);
+                const sy = Math.floor((vh - cropH) / 2);
+                canvas.width = cropW;
+                canvas.height = cropH;
+                ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+
+                try {
+                  const resultado = await ocrWorker.recognize(canvas);
+                  const texto = resultado?.data?.text || "";
+                  const loc = normalizarLocalizador(texto);
+                  if (loc) {
+                    enviarValor(loc, "ocr");
+                    break;
+                  }
+                } catch (e) {
+                  // OCR puede fallar en un fotograma; continuamos con el siguiente.
+                }
+
+                if (!yaEnvio) {
+                  estado.textContent = "📷 Buscando Localizador MCD...";
+                  await new Promise(r => setTimeout(r, 400));
+                }
+              }
+            } catch (e) {
+              detalle.textContent = "⚠️ OCR no disponible; se mantiene el lector de barras.";
+            } finally {
+              ocrActivo = false;
+            }
+          }
+
+          async function iniciarCamara() {
+            try {
+              streamActual = await navigator.mediaDevices.getUserMedia({
+                video: {
+                  facingMode: {ideal: "environment"},
+                  width: {ideal: 1920},
+                  height: {ideal: 1080},
+                  focusMode: {ideal: "continuous"}
+                },
+                audio: false
+              });
+              video.srcObject = streamActual;
+              await video.play();
+              estado.textContent = "📷 Buscando Localizador MCD...";
+
+              try {
+                const track = streamActual.getVideoTracks()[0];
+                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                if (caps.focusMode && caps.focusMode.includes("continuous")) {
+                  await track.applyConstraints({advanced:[{focusMode:"continuous"}]});
+                }
+              } catch (e) {}
+
+              // Iniciamos OCR sin bloquear el lector de barras.
+              iniciarOCR();
+            } catch (e) {
+              mostrarError("❌ No se pudo acceder a la cámara: " + (e.message || e));
+            }
+          }
+
+          function iniciarBarras() {
+            if (typeof ZXing === "undefined") return;
+            try {
+              const hints = new Map();
+              hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.ITF,
+                ZXing.BarcodeFormat.UPC_A
+              ]);
+              hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+              const reader = new ZXing.BrowserMultiFormatReader(hints);
+              reader.decodeFromVideoDevice(null, video, (result, err) => {
+                if (!result || yaEnvio) return;
+                enviarCodigoBarras(result.getText());
+              });
+            } catch (e) {
+              // OCR continúa siendo el método principal.
+            }
+          }
+
+          torchBtn.onclick = function() {
+            try {
+              const track = streamActual && streamActual.getVideoTracks()[0];
+              if (!track) throw new Error("No hay cámara activa");
+              const settings = track.getSettings();
+              track.applyConstraints({advanced:[{torch:!settings.torch}]})
+                .catch(() => alert("Este dispositivo no permite linterna desde el navegador."));
+            } catch (e) {
+              alert("No se pudo acceder a la linterna.");
+            }
+          };
+
+          let intentos = 0;
+          const esperarLibrerias = setInterval(() => {
+            intentos++;
+            if (typeof ZXing !== "undefined" && typeof Tesseract !== "undefined") {
+              clearInterval(esperarLibrerias);
+              iniciarCamara();
+              setTimeout(iniciarBarras, 1200);
+            } else if (intentos >= 100) {
+              clearInterval(esperarLibrerias);
+              if (typeof Tesseract !== "undefined") {
+                iniciarCamara();
+              } else {
+                mostrarError("❌ No se pudieron cargar los lectores. Recarga la página.");
+              }
+            }
+          }, 100);
+        </script>
+        """
+
+    if "mc_scan_activo" not in st.session_state:
+      st.session_state["mc_scan_activo"] = False
+
+    if not st.session_state["mc_scan_activo"]:
+      if st.button("📷 Activar cámara y escanear", key="btn_activar_scan", use_container_width=True):
+        st.session_state["mc_scan_activo"] = True
+        st.rerun()
+      st.info(
+          "La cámara, el lector de código de barras y el OCR solo se cargan "
+          "cuando presionas el botón de arriba. Antes se cargaban automáticamente "
+          "en CADA carga de la app (aunque estuvieras en otra pestaña), lo que "
+          "sumaba varios segundos de descarga de librerías y podía bloquear la "
+          "carga inicial si el navegador rechazaba el acceso a la cámara."
+      )
+    else:
+      components.html(video_scan_html, height=430)
+
+    st.caption(
+        "💡 Recomendado: centra el texto MCD.0.3.G.x.xxx dentro del recuadro verde, "
+        "a unos 10-20 cm. El sistema intenta reconocer primero el Localizador visible "
+        "y usa el código de barras como respaldo."
+    )
+
+    with st.expander("⌨️ ¿No lee el código? Ingresa el Localizador manualmente", expanded=True):
+      loc_manual = st.text_input(
+          "Localizador (ej: MCD.0.3.C.2.013):", key="loc_manual_input"
+      )
+      buscar_click = st.button("Buscar", key="btn_buscar_manual")
+
+    # Resuelve el Localizador a usar en esta misma ejecución: prioriza el
+    # ingreso manual recién enviado; si no, usa el que venga de la cámara
+    # (parámetro de URL). Evita depender de un segundo round-trip de rerun.
+    loc_query = st.query_params.get("loc", None)
+    loc_escaneado = None
+    if buscar_click and loc_manual.strip():
+      loc_escaneado = loc_manual.strip()
+      st.query_params["loc"] = loc_escaneado
+    elif loc_query:
+      loc_escaneado = loc_query
+
+    if st.button("🔄 Limpiar escaneo", key="btn_limpiar_scan"):
+      st.query_params.clear()
+      st.rerun()
+
+    if loc_escaneado:
+      df_stock_scan = df_stock_raw
+      if df_stock_scan is None:
+        st.error("No se encontró la hoja 'STOCK' en el Excel.")
+      else:
+        df_stock_scan = df_stock_scan.copy()
+
+        col_loc_scan = next(
+            (c for c in df_stock_scan.columns
+             if c.strip().lower() in ["localizador", "ubicacion"]),
+            None,
+        )
+        col_cod_scan = next(
+            (c for c in df_stock_scan.columns
+             if c.strip().lower() in ["codigo_articulo", "id_producto", "sku", "codigo"]),
+            None,
+        )
+        col_desc_scan = next(
+            (c for c in df_stock_scan.columns if "descripcion" in c.lower()), None
+        )
+        if not col_desc_scan and len(df_stock_scan.columns) > 3:
+          col_desc_scan = df_stock_scan.columns[3]
+        col_lote_scan = next(
+            (c for c in df_stock_scan.columns if c.strip().lower() == "lote_proveedor"),
+            None,
+        )
+        col_cant_scan = next(
+            (c for c in df_stock_scan.columns
+             if c.strip().lower() in ["cantidad", "stock", "unidades"]),
+            None,
+        )
+        col_fecha_scan = next(
+            (c for c in df_stock_scan.columns
+             if c.strip().lower() in ["fecha_expiracion_lote", "vencimiento", "fecha_expiracion"]),
+            None,
+        )
+
+        if not col_loc_scan:
+          st.error("La hoja STOCK no tiene columna de Localizador reconocible.")
+        else:
+          # ================================================================
+          # RESOLUCIÓN CÓDIGO DE BARRAS -> LOCALIZADOR
+          # ================================================================
+          def _norm_scan_value(v):
+              if v is None or pd.isna(v):
+                  return ""
+              s = str(v).strip().upper()
+              if s.endswith(".0"):
+                  s = s[:-2]
+              return s
+
+          def _parece_localizador(v):
+              s = _norm_scan_value(v)
+              if not s:
+                  return False
+              partes = s.split(".")
+              return len(partes) >= 5 and partes[0] == "MCD" and all(part.strip() for part in partes)
+
+          scan_norm = _norm_scan_value(loc_escaneado)
+          localizadores_encontrados = []
+          hoja_mapeo = None
+
+          # Respaldo para las etiquetas probadas.
+          MAPEO_PRUEBA = {
+              "9631187073887": "MCD.0.3.G.2.120",
+              "11111283": "MCD.0.3.G.4.120",
+          }
+
+          resultado = df_stock_scan[
+              df_stock_scan[col_loc_scan].apply(_norm_scan_value) == scan_norm
+          ].copy()
+
+          if not resultado.empty:
+              localizadores_encontrados = [str(loc_escaneado).strip()]
+              hoja_mapeo = "STOCK"
+
+          if resultado.empty and scan_norm and scan_norm in MAPEO_PRUEBA:
+              localizadores_encontrados = [MAPEO_PRUEBA[scan_norm]]
+              hoja_mapeo = "MAPEO_PRUEBA"
+              loc_norms = {_norm_scan_value(x) for x in localizadores_encontrados}
+              resultado = df_stock_scan[
+                  df_stock_scan[col_loc_scan].apply(_norm_scan_value).isin(loc_norms)
+              ].copy()
+
+          # Busca códigos en todas las hojas para encontrar una relación
+          # código -> Localizador si existe en el Excel.
+          if resultado.empty and scan_norm:
+              for nombre_hoja, df_mapeo in hojas_disponibles.items():
+                  if df_mapeo is None or not hasattr(df_mapeo, "columns"):
+                      continue
+                  try:
+                      df_mapeo = df_mapeo.copy()
+                  except Exception:
+                      continue
+
+                  for col in df_mapeo.columns:
+                      try:
+                          mask_codigo = df_mapeo[col].apply(_norm_scan_value) == scan_norm
+                      except Exception:
+                          continue
+                      if not mask_codigo.any():
+                          continue
+
+                      filas_match = df_mapeo.loc[mask_codigo]
+                      columnas_loc = [
+                          c for c in df_mapeo.columns
+                          if any(palabra in str(c).strip().lower()
+                                 for palabra in ["localizador", "ubicacion", "ubicación", "loc"])
+                      ]
+                      candidatos = []
+                      for c_loc in columnas_loc:
+                          try:
+                              candidatos.extend(filas_match[c_loc].dropna().astype(str).str.strip().tolist())
+                          except Exception:
+                              pass
+                      if not candidatos:
+                          for _, fila_match in filas_match.iterrows():
+                              for valor in fila_match.tolist():
+                                  if _parece_localizador(valor):
+                                      candidatos.append(str(valor).strip())
+
+                      candidatos = [x for x in candidatos if _parece_localizador(x)]
+                      candidatos = list(dict.fromkeys(candidatos))
+                      if candidatos:
+                          localizadores_encontrados.extend(candidatos)
+                          hoja_mapeo = nombre_hoja
+                          break
+                  if localizadores_encontrados:
+                      break
+
+              localizadores_encontrados = list(dict.fromkeys(localizadores_encontrados))
+              if localizadores_encontrados:
+                  loc_norms = {_norm_scan_value(x) for x in localizadores_encontrados}
+                  resultado = df_stock_scan[
+                      df_stock_scan[col_loc_scan].apply(_norm_scan_value).isin(loc_norms)
+                  ].copy()
+
+          if localizadores_encontrados and not resultado.empty:
+              loc_mostrado = ", ".join(localizadores_encontrados)
+              if hoja_mapeo and hoja_mapeo != "STOCK":
+                  st.success(f"📍 Localizador detectado: **{loc_mostrado}**")
+              else:
+                  st.success(f"📍 Localizador: **{loc_mostrado}**")
+          elif scan_norm:
+              st.warning(
+                  f"⚠️ Se detectó **{loc_escaneado}**, pero no encontré ese Localizador ni una relación código → Localizador en el Excel."
+              )
+
+          # ================================================================
+          # MOSTRAR LOS PRODUCTOS: MISMA LÓGICA QUE LA BÚSQUEDA MANUAL
+          # ================================================================
+          if resultado.empty:
+            st.warning("No se encontró ningún producto registrado en esa posición.")
+          else:
+            if col_cant_scan:
+              resultado[col_cant_scan] = resultado[col_cant_scan].apply(limpiar_numero)
+            if col_cod_scan:
+              resultado[col_cod_scan] = resultado[col_cod_scan].apply(fmt_code)
+            if col_fecha_scan:
+              resultado[col_fecha_scan] = pd.to_datetime(
+                  resultado[col_fecha_scan], errors="coerce"
+              ).dt.strftime("%d-%m-%Y")
+
+            for _, fila in resultado.iterrows():
+              desc_txt = fila[col_desc_scan] if col_desc_scan else "Sin descripción"
+              cod_txt = fila[col_cod_scan] if col_cod_scan else "S/N"
+              cant_txt = (
+                  formato_unidades(fila[col_cant_scan]) if col_cant_scan else "N/A"
+              )
+              lote_txt = fila[col_lote_scan] if col_lote_scan else "N/A"
+              fecha_txt = fila[col_fecha_scan] if col_fecha_scan else "N/A"
+
+              st.markdown(
+                  _dedent_html(f"""
+                  <div style="background-color:#141414; border:1px solid #0070f3;
+                              border-radius:10px; padding:16px; margin-bottom:12px;">
+                      <div style="color:#aaaaaa; font-size:12px; text-transform:uppercase;">Producto</div>
+                      <div style="color:#ffffff; font-size:20px; font-weight:bold;">{desc_txt}</div>
+                      <div style="margin-top:8px; color:#cccccc; font-size:14px;">
+                          Código: <b>{cod_txt}</b> · Lote: <b>{lote_txt}</b> · Vence: <b>{fecha_txt}</b>
+                      </div>
+                      <div style="margin-top:8px; color:#2ecc71; font-size:22px; font-weight:bold;">
+                          Stock: {cant_txt} unidades
+                      </div>
+                  </div>
+                  """),
+                  unsafe_allow_html=True,
+              )
+    else:
+      st.info("Aún no se ha escaneado ningún código.")
+
+
 # ----------------------------------------------------------------------
 # Pestañas
 # ----------------------------------------------------------------------
-tab_almacen, tab_stock = st.tabs(
-    ["📦 Almacenamiento", "🗓️ Stock y Caducidad"]
+tab_almacen, tab_stock, tab_escanear = st.tabs(
+    ["📦 Almacenamiento", "🗓️ Stock y Caducidad", "📷 Escanear"]
 )
 
 with tab_almacen:
@@ -1366,3 +1873,16 @@ with tab_stock:
         )
     else:
         render_stock(df_stock_raw)
+
+with tab_escanear:
+    if df_stock_raw is None:
+        st.error(
+            f"No pude cargar la hoja `STOCK` del Excel: {error_stock}"
+        )
+    else:
+        hojas_disponibles = {}
+        if df_stock_raw is not None:
+            hojas_disponibles["STOCK"] = df_stock_raw
+        if df_raw is not None:
+            hojas_disponibles["UBICACIONES"] = df_raw
+        render_escanear(df_stock_raw, hojas_disponibles)
