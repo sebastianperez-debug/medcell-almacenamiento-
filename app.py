@@ -341,8 +341,40 @@ st.download_button(
 st.write("")
 
 # ----------------------------------------------------------------------
-# Tabs para organizar el contenido
+# Ubicaciones vacías (VACIAS > 0) — tabla y descarga aparte, independiente
+# de los filtros de Almacenamiento/Recetario, pero respeta Pasillo/Bodega
+# y la búsqueda de localizador ya aplicados arriba.
 # ----------------------------------------------------------------------
+with st.expander("📭 Ver y descargar solo ubicaciones vacías", expanded=False):
+    df_vacias = df_raw[
+        df_raw["PASILLO"].isin(pasillos_activos)
+        & df_raw["Bodega"].isin(bodegas_activas)
+        & (df_raw["VACIAS"] > 0)
+    ]
+    if localizador_q:
+        df_vacias = df_vacias[
+            df_vacias["LOCALIZADOR"].str.contains(localizador_q, case=False, na=False)
+        ]
+
+    st.caption(
+        f"**{len(df_vacias):,}** ubicaciones vacías encontradas "
+        f"(según Pasillo/Bodega/localizador seleccionados, "
+        f"sin aplicar el filtro de Almacenamiento/Recetario)."
+        .replace(",", ".")
+    )
+    st.dataframe(df_vacias, use_container_width=True, height=280)
+
+    csv_vacias = df_vacias.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="⬇️ Descargar vacías (CSV)",
+        data=csv_vacias,
+        file_name=f"ubicaciones_vacias_{date.today().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+    )
+
+st.write("")
+
+
 tab_resumen, tab_bodega, tab_pasillo_nivel, tab_composicion = st.tabs(
     ["📊 Resumen general", "🏬 Por bodega", "🧭 Pasillo y nivel", "🧩 Composición"]
 )
