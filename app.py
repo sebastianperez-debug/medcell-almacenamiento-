@@ -660,7 +660,9 @@ def render_almacenamiento(
                     color="#E2E8F0",
                 ),
                 outlinewidth=0,
-                len=0.82,
+                len=1.0,
+                thickness=14,
+                y=0.5,
             ),
             hovertemplate=(
                 "<b>Nivel %{y} · Pasillo %{customdata[3]}</b><br>"
@@ -704,9 +706,9 @@ def render_almacenamiento(
             ),
             tickmode="array",
             tickvals=y_positions,
-            ticktext=[f"Nivel {r}" for r in niveles] + ["Total"],
+            ticktext=[f"Nivel {r}" for r in niveles],
             tickfont=dict(size=11, color="#E2E8F0"),
-            range=[8.5, 0.5],
+            range=[7.5, 0.5],
             showgrid=False,
             zeroline=False,
         ),
@@ -886,60 +888,6 @@ def render_almacenamiento(
         )
         st.plotly_chart(fig_bd, use_container_width=True)
 
-    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
-    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
-    fig_tree = px.treemap(
-        g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
-    )
-    fig_tree.update_traces(
-        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
-        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
-        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
-        root_color="rgba(0,0,0,0)",
-    )
-    fig_tree.update_layout(
-        height=320, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig_tree, use_container_width=True)
-
-    st.write("")
-    # =========================================================================
-    # SECCIÓN DE LA IMAGEN 1 (AHORA ABAJO): RESUMEN TOTAL Y POR PASILLO
-    # =========================================================================
-    st.markdown('<p class="section-title">Ubicaciones ocupadas vs. disponibles</p>', unsafe_allow_html=True)
-    fig_total = go.Figure()
-    fig_total.add_trace(
-        go.Bar(
-            x=[ocupadas], y=["Ubicaciones"], orientation="h",
-            name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-            text=[f"{ocupadas:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Ocupadas: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.add_trace(
-        go.Bar(
-            x=[disponibles], y=["Ubicaciones"], orientation="h",
-            name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-            text=[f"{disponibles:,}".replace(",", ".")], textposition="inside",
-            textfont=dict(color="#0B1220", size=13, family=PLOTLY_FONT_FAMILY),
-            hovertemplate="Disponibles: %{x:,.0f}<extra></extra>",
-        )
-    )
-    fig_total.update_layout(
-        **BASE_LAYOUT,
-        barmode="stack", height=110, bargap=0.55,
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.15, x=0,
-                     bgcolor="rgba(0,0,0,0)"),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
 
     st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
     gp = (
@@ -981,6 +929,26 @@ def render_almacenamiento(
                      bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig_pas, use_container_width=True)
+
+    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
+    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
+    fig_tree = px.treemap(
+        g3, path=["Bodega"], values="cantidad",
+        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
+    )
+    fig_tree.update_traces(
+        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
+        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
+        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
+        root_color="rgba(0,0,0,0)",
+    )
+    fig_tree.update_layout(
+        height=320, margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig_tree, use_container_width=True)
 
     st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
 
