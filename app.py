@@ -135,10 +135,10 @@ CSS = f"""
         font-size:13px;
         font-weight:700;
         color:#F2F2F2;
-        margin:0 0 8px 0;
+        margin:0 0 5px 0;
     }}
     .pasillo-card.pasillo-card-detalle {{
-        min-height:210px;
+        min-height:0;
         padding-left:4px;
         padding-right:4px;
     }}
@@ -152,15 +152,15 @@ CSS = f"""
         width:100%;
     }}
     .pasillo-cat-head {{
-        margin-top:12px;
-        padding:0 0 6px;
+        margin-top:7px;
+        padding:0 0 4px;
         color:#8EA7C7;
         font-size:7px;
         font-weight:700;
         border-bottom:1px solid #2B344A;
     }}
     .pasillo-cat-row {{
-        padding:7px 0;
+        padding:5px 0;
         font-size:10px;
         line-height:1.2;
         border-bottom:1px solid rgba(43,52,74,.55);
