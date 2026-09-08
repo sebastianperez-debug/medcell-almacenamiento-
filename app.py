@@ -13,6 +13,7 @@ import io
 from datetime import date
 
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.colors import sample_colorscale
@@ -729,41 +730,38 @@ def render_almacenamiento(
         )
         st.plotly_chart(fig_bd, use_container_width=True)
 
-    st.markdown('<p class="section-title">Distribución de ubicaciones por bodega (treemap)</p>', unsafe_allow_html=True)
-    g3 = df.groupby("Bodega").size().reset_index(name="cantidad")
-    fig_tree = px.treemap(
-        g3, path=["Bodega"], values="cantidad",
-        color="cantidad", color_continuous_scale=[COLOR_NEUTRO, COLOR_ACENTO_1, COLOR_ACENTO_2],
-    )
-    fig_tree.update_traces(
-        marker=dict(line=dict(color=COLOR_CARD_BG, width=2)),
-        textfont=dict(family=PLOTLY_FONT_FAMILY, size=14, color="#F8FAFC"),
-        hovertemplate="%{label}<br>%{value:,.0f} ubicaciones<extra></extra>",
-        root_color="rgba(0,0,0,0)",
-    )
-    fig_tree.update_layout(
-        height=320, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig_tree, use_container_width=True)
-
     st.write("")
     st.markdown('<p class="section-title">% Ocupación por Nivel y Pasillo</p>', unsafe_allow_html=True)
+    # Porcentaje para el color y conteos reales para el detalle al pasar el puntero.
     piv = df.pivot_table(
         index="NIVEL", columns="PASILLO", values="OCUPADA", aggfunc="mean"
     ) * 100
     piv = piv.reindex(sorted(piv.index, key=lambda x: int(x)))
     piv = piv[sorted(piv.columns)]
 
+    vacias_piv = df.pivot_table(
+        index="NIVEL", columns="PASILLO", values="OCUPADA",
+        aggfunc=lambda s: (~s).sum(), fill_value=0
+    ).reindex(index=piv.index, columns=piv.columns, fill_value=0)
+
+    total_piv = df.pivot_table(
+        index="NIVEL", columns="PASILLO", values="OCUPADA",
+        aggfunc="count", fill_value=0
+    ).reindex(index=piv.index, columns=piv.columns, fill_value=0)
+
     nivel_totales = df.groupby("NIVEL")["OCUPADA"].mean() * 100
     piv["Total"] = nivel_totales.reindex(piv.index)
+    vacias_piv["Total"] = df.groupby("NIVEL")["OCUPADA"].apply(lambda s: (~s).sum()).reindex(piv.index)
+    total_piv["Total"] = df.groupby("NIVEL")["OCUPADA"].count().reindex(piv.index)
 
     pasillo_totales = df.groupby("PASILLO")["OCUPADA"].mean() * 100
     fila_total = pasillo_totales.reindex(piv.columns[:-1])
     fila_total["Total"] = df["OCUPADA"].mean() * 100
     piv.loc["Total"] = fila_total
+    vacias_piv.loc["Total"] = df.groupby("PASILLO")["OCUPADA"].apply(lambda s: (~s).sum()).reindex(piv.columns[:-1])
+    vacias_piv.loc["Total", "Total"] = (~df["OCUPADA"]).sum()
+    total_piv.loc["Total"] = df.groupby("PASILLO")["OCUPADA"].count().reindex(piv.columns[:-1])
+    total_piv.loc["Total", "Total"] = len(df)
 
     text_vals = piv.round(1).astype(str) + "%"
 
@@ -779,7 +777,13 @@ def render_almacenamiento(
                 tickfont=dict(family=PLOTLY_FONT_FAMILY, color="#E2E8F0"),
                 outlinewidth=0,
             ),
-            hovertemplate="Nivel %{y} · Pasillo %{x}<br>%{z:.1f}%<extra></extra>",
+            customdata=np.dstack([vacias_piv.values, total_piv.values]),
+            hovertemplate=(
+                "Nivel %{y} · Pasillo %{x}<br>"
+                "Ocupación: %{z:.1f}%<br>"
+                "Posiciones vacías: %{customdata[0]:,.0f}<br>"
+                "Posiciones totales: %{customdata[1]:,.0f}<extra></extra>"
+            ),
         )
     )
     fig_heat.update_layout(
@@ -815,7 +819,7 @@ def render_almacenamiento(
         )
         estado_tabla = st.radio(
             "Ver ubicaciones",
-            ["Todas", "Ocupadas", "Disponibles"],
+            ["Todas", "Ocupadas", "Vacías"],
             index=0, horizontal=True, key="detalle_estado_filtro",
             label_visibility="collapsed",
         )
@@ -825,7 +829,7 @@ def render_almacenamiento(
         df_detalle = df_detalle[df_detalle["PASILLO"].isin(pasillos_tabla)]
     if estado_tabla == "Ocupadas":
         df_detalle = df_detalle[df_detalle["OCUPADA"]]
-    elif estado_tabla == "Disponibles":
+    elif estado_tabla == "Vacías":
         df_detalle = df_detalle[~df_detalle["OCUPADA"]]
 
     # Se ocultan ALMACENAMIENTO y OBSERVACIONES: son las columnas crudas del
@@ -845,6 +849,13 @@ def render_almacenamiento(
         )
     if "Par" in df_detalle.columns:
         df_detalle["Par"] = df_detalle["Par"].apply(lambda x: "Sí" if x else "No")
+
+    # Encabezados más claros para una lectura rápida.
+    df_detalle = df_detalle.rename(columns={
+        "VACIAS": "Vacías",
+        "OCUPADA": "Ocupada",
+        "Par": "Par",
+    })
 
     st.dataframe(df_detalle, use_container_width=True, height=320)
     st.caption(
