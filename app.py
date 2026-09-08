@@ -777,6 +777,15 @@ def render_almacenamiento(
     elif estado_tabla == "Disponibles":
         df_detalle = df_detalle[~df_detalle["OCUPADA"]]
 
+    # Se ocultan ALMACENAMIENTO y OBSERVACIONES: son las columnas crudas del
+    # Excel que casi siempre vienen vacías (se ven como "None"); su
+    # información resumida ya está en ALMACENAMIENTO_FLAG y ES_RECETARIO.
+    # VACIAS se muestra como casilla (tick = 1, vacía = 0) igual que
+    # Par y OCUPADA, en vez del número crudo.
+    df_detalle = df_detalle.drop(columns=["ALMACENAMIENTO", "OBSERVACIONES"], errors="ignore")
+    if "VACIAS" in df_detalle.columns:
+        df_detalle["VACIAS"] = df_detalle["VACIAS"].astype(bool)
+
     st.dataframe(df_detalle, use_container_width=True, height=320)
     st.caption(
         f"{len(df_detalle):,} ubicaciones mostradas de {len(df):,} totales."
