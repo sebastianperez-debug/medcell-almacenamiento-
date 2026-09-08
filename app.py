@@ -145,7 +145,7 @@ CSS = f"""
     .pasillo-cat-head,
     .pasillo-cat-row {{
         display:grid;
-        grid-template-columns: 92px 44px 50px;
+        grid-template-columns: 84px 46px 52px;
         gap:1px;
         align-items:center;
         justify-content:start;
@@ -175,13 +175,13 @@ CSS = f"""
         word-break:normal;
         hyphens:none;
         min-width:0;
-        max-width:92px;
+        max-width:84px;
         white-space:normal;
     }}
     .pasillo-cat-empty {{
         color:#20D46B;
         font-weight:800;
-        font-size:11px;
+        font-size:13px;
         line-height:1;
         text-align:center;
         white-space:nowrap;
@@ -190,7 +190,7 @@ CSS = f"""
     .pasillo-cat-occupied {{
         color:#FFC400;
         font-weight:800;
-        font-size:11px;
+        font-size:13px;
         line-height:1;
         text-align:center;
         white-space:nowrap;
