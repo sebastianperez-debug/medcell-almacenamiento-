@@ -33,8 +33,8 @@ st.set_page_config(
 # más desaturada que naranja/verde-azulado puro (evita el aire "años 2010").
 # Ocupado/Disponible: contraste frío/frío-cálido, cohesivo con el resto
 # de la app (no se confunde con el semáforo de severidad de las tarjetas KPI).
-COLOR_OCUPADA = "#6366F1"       # índigo (marca principal)
-COLOR_DISPONIBLE = "#2DD4BF"    # teal / menta
+COLOR_OCUPADA = "#EAB308"       # amarillo dorado (ocupado, cálido)
+COLOR_DISPONIBLE = "#22C55E"    # verde vívido (disponible, libre)
 
 # Semáforo de severidad (KPIs y heatmap) — tonos "flat design" suavizados
 COLOR_ROJO = "#FB7185"          # crítico (>90%)
@@ -43,7 +43,7 @@ COLOR_VERDE = "#34D399"         # saludable (<70%)
 
 # Acentos secundarios para gráficos de composición / treemap
 COLOR_ACENTO_1 = "#818CF8"      # índigo claro
-COLOR_ACENTO_2 = "#2DD4BF"      # teal (mismo que disponible, para cohesión)
+COLOR_ACENTO_2 = "#22C55E"      # verde (mismo que disponible, para cohesión)
 COLOR_NEUTRO = "#334155"        # slate oscuro de fondo para escalas
 
 COLOR_CARD_BG = "#161B2C"
