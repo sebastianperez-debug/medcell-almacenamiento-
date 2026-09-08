@@ -747,7 +747,41 @@ def render_almacenamiento(
 
     st.write("")
     st.markdown('<p class="section-title">Detalle de datos filtrados</p>', unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, height=320)
+
+    col_filtro_pas, col_filtro_estado = st.columns([1, 1])
+    with col_filtro_pas:
+        pasillos_tabla = st.multiselect(
+            "Pasillo",
+            sorted(df["PASILLO"].unique()),
+            default=[],
+            placeholder="Todos los pasillos",
+            key="detalle_pasillo_filtro",
+        )
+    with col_filtro_estado:
+        st.markdown(
+            '<p style="margin-bottom:6px; font-size:14px;">Ver ubicaciones:</p>',
+            unsafe_allow_html=True,
+        )
+        estado_tabla = st.radio(
+            "Ver ubicaciones",
+            ["Todas", "Ocupadas", "Disponibles"],
+            index=0, horizontal=True, key="detalle_estado_filtro",
+            label_visibility="collapsed",
+        )
+
+    df_detalle = df.copy()
+    if pasillos_tabla:
+        df_detalle = df_detalle[df_detalle["PASILLO"].isin(pasillos_tabla)]
+    if estado_tabla == "Ocupadas":
+        df_detalle = df_detalle[df_detalle["OCUPADA"]]
+    elif estado_tabla == "Disponibles":
+        df_detalle = df_detalle[~df_detalle["OCUPADA"]]
+
+    st.dataframe(df_detalle, use_container_width=True, height=320)
+    st.caption(
+        f"{len(df_detalle):,} ubicaciones mostradas de {len(df):,} totales."
+        .replace(",", ".")
+    )
 
 
 def render_stock(df_stock_raw):
