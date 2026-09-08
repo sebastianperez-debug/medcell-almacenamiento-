@@ -57,6 +57,35 @@ CSS = f"""
         color: #E2E8F0 !important;
     }}
     [data-testid="stHeader"] {{ background-color: #0B0F17 !important; }}
+    /* Refuerzo para computadores/navegadores en modo claro: la app tiene
+       tema oscuro fijado en .streamlit/config.toml, pero estos selectores
+       cubren widgets nativos como respaldo adicional. */
+    [data-testid="stSidebar"], [data-testid="stSidebarContent"] {{
+        background-color: #0B0F17 !important;
+        color: #E2E8F0 !important;
+    }}
+    [data-testid="stSidebar"] * {{ color: #E2E8F0 !important; }}
+    [data-testid="stExpander"] {{
+        background-color: {COLOR_CARD_BG} !important;
+        border: 1px solid {COLOR_CARD_BORDER} !important;
+        border-radius: 8px !important;
+    }}
+    [data-testid="stFileUploaderDropzone"] {{
+        background-color: {COLOR_CARD_BG} !important;
+        border: 1px dashed {COLOR_CARD_BORDER} !important;
+    }}
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    [data-testid="stTextInput"] input {{
+        background-color: {COLOR_CARD_BG} !important;
+        color: #E2E8F0 !important;
+        border-color: {COLOR_CARD_BORDER} !important;
+    }}
+    div[data-baseweb="popover"] ul {{
+        background-color: {COLOR_CARD_BG} !important;
+    }}
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li {{ color: #E2E8F0; }}
     /* Tarjetas KPI */
     .metric-card {{
         background-color:{COLOR_CARD_BG};
