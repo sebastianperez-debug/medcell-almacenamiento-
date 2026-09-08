@@ -137,7 +137,47 @@ CSS = f"""
         color:#F2F2F2;
         margin:0 0 8px 0;
     }}
-    .pasillo-card .pasillo-stats {{
+    .pasillo-card .pasillo-card-detalle {
+    min-height: 185px;
+}
+.pasillo-cat-head,
+.pasillo-cat-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 58px 68px;
+    gap: 6px;
+    align-items: center;
+}
+.pasillo-cat-head {
+    margin-top: 12px;
+    padding: 0 8px 6px;
+    color: #8EA7C7;
+    font-size: 9px;
+    font-weight: 700;
+    border-bottom: 1px solid #2B344A;
+}
+.pasillo-cat-row {
+    padding: 5px 8px;
+    font-size: 10px;
+    border-bottom: 1px solid rgba(43,52,74,.55);
+}
+.pasillo-cat-name {
+    color: #E2E8F0;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pasillo-cat-empty {
+    color: #20D46B;
+    font-weight: 800;
+    text-align: right;
+}
+.pasillo-cat-occupied {
+    color: #FFC400;
+    font-weight: 800;
+    text-align: right;
+}
+.pasillo-stats {{
         display:flex;
         justify-content:space-around;
     }}
@@ -639,17 +679,65 @@ def render_almacenamiento(
     st.markdown('<p class="section-title">Detalle por pasillo: vacías y ocupadas</p>', unsafe_allow_html=True)
 
     def pasillo_card(col, pasillo, vacias, ocupadas):
-        col.markdown(
-            f'<div class="pasillo-card">'
-            f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
-            f'<div class="pasillo-stats">'
-            f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
-            f'<p>VACÍAS</p></div>'
-            f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
-            f'<p>OCUPADAS</p></div>'
-            f'</div></div>'.replace(",", "."),
-            unsafe_allow_html=True,
-        )
+        # A y B tienen más de una categoría. En esas dos tarjetas mostramos
+        # el detalle por categoría; el resto conserva la tarjeta original.
+        if str(pasillo) in ("A", "B"):
+            sub = df[df["PASILLO"].astype(str).str.strip() == str(pasillo)].copy()
+            if "Bodega" in sub.columns:
+                detalle = (
+                    sub.groupby("Bodega", dropna=False)
+                    .agg(
+                        vacias=("VACIAS", "sum"),
+                        ocupadas=("OCUPADA", "sum"),
+                    )
+                    .reset_index()
+                )
+                detalle["Bodega"] = detalle["Bodega"].fillna("SIN CATEGORÍA").astype(str)
+                detalle = detalle.sort_values("Bodega")
+            else:
+                detalle = pd.DataFrame(columns=["Bodega", "vacias", "ocupadas"])
+
+            nombres = {
+                "COSMETICO": "COSMÉTICO",
+                "DISP.MEDICOS": "DISP. MÉDICOS",
+                "INFLAMABLE": "INFLAMABLE",
+                "ALIMENTO": "ALIMENTO",
+                "ALTILLO": "ALTILLO",
+            }
+
+            filas = ""
+            for _, r in detalle.iterrows():
+                categoria = nombres.get(str(r["Bodega"]).strip(), str(r["Bodega"]).strip())
+                filas += (
+                    f'<div class="pasillo-cat-row">'
+                    f'<span class="pasillo-cat-name">{categoria}</span>'
+                    f'<span class="pasillo-cat-empty">{int(r["vacias"]):,}</span>'
+                    f'<span class="pasillo-cat-occupied">{int(r["ocupadas"]):,}</span>'
+                    f'</div>'
+                ).replace(",", ".")
+
+            col.markdown(
+                f'<div class="pasillo-card pasillo-card-detalle">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-cat-head">'
+                f'<span>CATEGORÍA</span><span>VACÍAS</span><span>OCUPADAS</span>'
+                f'</div>'
+                f'{filas}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            col.markdown(
+                f'<div class="pasillo-card">'
+                f'<p class="pasillo-nombre">Pasillo {pasillo}</p>'
+                f'<div class="pasillo-stats">'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_DISPONIBLE};">{vacias:,}</h1>'
+                f'<p>VACÍAS</p></div>'
+                f'<div class="pasillo-stat"><h1 style="color:{COLOR_OCUPADA};">{ocupadas:,}</h1>'
+                f'<p>OCUPADAS</p></div>'
+                f'</div></div>'.replace(",", "."),
+                unsafe_allow_html=True,
+            )
 
     TARJETAS_POR_FILA = 7
     pasillos_lista = list(gp.index)
