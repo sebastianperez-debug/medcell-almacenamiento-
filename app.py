@@ -87,6 +87,28 @@ CSS = f"""
     }}
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li {{ color: #E2E8F0; }}
+    /* Refuerzo adicional: botones de descarga/acción y el botón "Browse
+       files" del uploader, que en modo claro del navegador se ven blancos. */
+    [data-testid="stDownloadButton"] button,
+    [data-testid="stBaseButton-secondary"],
+    [data-testid="stFileUploader"] section button,
+    div[data-testid="stButton"] button {{
+        background-color: {COLOR_CARD_BG} !important;
+        color: #E2E8F0 !important;
+        border: 1px solid {COLOR_CARD_BORDER} !important;
+    }}
+    [data-testid="stFileUploader"] section,
+    [data-testid="stFileUploader"] small {{
+        color: #E2E8F0 !important;
+    }}
+    /* La tabla (st.dataframe) se dibuja en canvas y toma sus colores
+       directamente del tema activo de Streamlit, no de este CSS: por eso
+       el arreglo de fondo para ella vive en .streamlit/config.toml. Aquí
+       solo cubrimos el borde/toolbar exterior como respaldo visual. */
+    [data-testid="stDataFrame"] {{
+        border: 1px solid {COLOR_CARD_BORDER} !important;
+        border-radius: 6px;
+    }}
     /* Tarjetas KPI */
     .metric-card {{
         background-color:{COLOR_CARD_BG};
