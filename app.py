@@ -116,6 +116,8 @@ CSS = f"""
         border-radius:14px;
         padding:20px 16px;
         text-align:center;
+        width:100%;
+        box-sizing:border-box;
         height:100%;
         min-height:148px;
         display:flex;
