@@ -171,8 +171,8 @@ CSS = f"""
     .pasillo-cat-head,
     .pasillo-cat-row {{
         display:grid;
-        grid-template-columns: 84px 46px 52px;
-        gap:1px;
+        grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap:2px;
         align-items:center;
         justify-content:start;
         width:100%;
@@ -185,6 +185,10 @@ CSS = f"""
         font-weight:700;
         border-bottom:1px solid #2B344A;
     }}
+    .pasillo-cat-head span:nth-child(2),
+    .pasillo-cat-head span:nth-child(3) {{
+        text-align:center;
+    }}
     .pasillo-cat-row {{
         padding:5px 0;
         font-size:10px;
@@ -195,14 +199,12 @@ CSS = f"""
         color:#E2E8F0;
         text-align:left;
         white-space:normal;
-        overflow:visible;
-        text-overflow:clip;
-        overflow-wrap:normal;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        overflow-wrap:break-word;
         word-break:normal;
         hyphens:none;
         min-width:0;
-        max-width:84px;
-        white-space:normal;
     }}
     .pasillo-cat-empty {{
         color:#20D46B;
@@ -212,6 +214,8 @@ CSS = f"""
         text-align:center;
         white-space:nowrap;
         overflow:hidden;
+        text-overflow:ellipsis;
+        min-width:0;
     }}
     .pasillo-cat-occupied {{
         color:#FFC400;
@@ -221,6 +225,8 @@ CSS = f"""
         text-align:center;
         white-space:nowrap;
         overflow:hidden;
+        text-overflow:ellipsis;
+        min-width:0;
     }}
     .pasillo-stats {{
         display:flex;
