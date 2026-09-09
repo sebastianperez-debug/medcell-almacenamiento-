@@ -187,6 +187,37 @@ CSS = f"""
         font-size:13px;
     }}
 
+    /* Banner de marca (parte superior de toda la app) */
+    .brand-banner {{
+        background:linear-gradient(120deg, {COLOR_CARD_BG} 0%, #0D1120 100%);
+        border:1px solid {COLOR_CARD_BORDER};
+        border-radius:14px;
+        padding:22px 28px;
+        margin-bottom:22px;
+        box-shadow:0 4px 14px rgba(0,0,0,0.28);
+    }}
+    .brand-banner h1 {{
+        margin:0;
+        font-size:34px;
+        font-weight:800;
+        letter-spacing:.5px;
+        line-height:1.1;
+    }}
+    .brand-banner h1 .brand-white {{
+        color:#F2F2F2;
+    }}
+    .brand-banner h1 .brand-accent {{
+        color:{COLOR_ACENTO_1};
+    }}
+    .brand-banner .brand-sub {{
+        margin:6px 0 0 0;
+        font-size:12px;
+        font-weight:700;
+        letter-spacing:1.2px;
+        text-transform:uppercase;
+        color:{COLOR_TEXT_MUTED};
+    }}
+
     /* Sección títulos */
     .section-title {{
         font-size:16px;
@@ -2330,6 +2361,19 @@ def render_escanear(df_stock_raw, hojas_disponibles):
     else:
       st.info("Aún no se ha escaneado ningún código.")
 
+
+# ----------------------------------------------------------------------
+# Banner de marca
+# ----------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="brand-banner">
+        <h1><span class="brand-white">MEDCELL</span> <span class="brand-accent">ALMACENAMIENTO</span></h1>
+        <p class="brand-sub">Análisis de operación</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ----------------------------------------------------------------------
 # Pestañas
