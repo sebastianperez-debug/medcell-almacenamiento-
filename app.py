@@ -111,33 +111,56 @@ CSS = f"""
     }}
     /* Tarjetas KPI */
     .metric-card {{
-        background-color:{COLOR_CARD_BG};
+        background:linear-gradient(160deg, {COLOR_CARD_BG} 0%, rgba(255,255,255,0.02) 100%);
         border:1px solid {COLOR_CARD_BORDER};
-        border-radius:10px;
-        padding:16px 18px;
+        border-radius:14px;
+        padding:20px 16px;
         text-align:center;
         height:100%;
+        min-height:148px;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:2px;
+        box-shadow:0 2px 10px rgba(0,0,0,0.22);
+        transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }}
+    .metric-card:hover {{
+        transform:translateY(-3px);
+        box-shadow:0 10px 22px rgba(0,0,0,0.35);
+        border-color:rgba(255,255,255,0.18);
     }}
     .metric-card h1 {{
         font-size:30px;
         margin:0;
         color:#F2F2F2;
         font-weight:700;
+        line-height:1.15;
     }}
     .metric-card p {{
-        margin-top:4px;
+        margin-top:6px;
         margin-bottom:0;
         color:{COLOR_TEXT_MUTED};
-        font-size:13px;
-        letter-spacing:.2px;
+        font-size:12.5px;
+        letter-spacing:.3px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:6px;
+    }}
+    .metric-card p .kpi-icon {{
+        font-size:14px;
+        opacity:.85;
     }}
     .metric-card .badge {{
         display:inline-block;
-        margin-top:6px;
-        padding:2px 10px;
-        border-radius:12px;
+        margin-top:10px;
+        padding:3px 12px;
+        border-radius:20px;
         font-size:11px;
-        font-weight:600;
+        font-weight:700;
+        letter-spacing:.3px;
     }}
 
     /* Header superior */
@@ -666,29 +689,31 @@ def render_almacenamiento(
         unsafe_allow_html=True,
     )
 
-    def kpi_card(col, value, label, badge_text=None, badge_color=None):
+    def kpi_card(col, value, label, badge_text=None, badge_color=None, icon=None):
         badge_html = ""
         if badge_text:
             badge_html = (
                 f'<span class="badge" style="background-color:{badge_color}22;'
-                f'color:{badge_color};">{badge_text}</span>'
+                f'color:{badge_color};border:1px solid {badge_color}55;">{badge_text}</span>'
             )
+        icon_html = f'<span class="kpi-icon">{icon}</span>' if icon else ""
         col.markdown(
             f'<div class="metric-card"><h1>{value}</h1>'
-            f"<p>{label}</p>{badge_html}</div>",
+            f"<p>{icon_html}{label}</p>{badge_html}</div>",
             unsafe_allow_html=True,
         )
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
-    kpi_card(k1, f"{total_localizadores:,}".replace(",", "."), "Localizadores")
-    kpi_card(k2, f"{ocupadas:,}".replace(",", "."), "Ubicaciones ocupadas")
-    kpi_card(k3, f"{disponibles:,}".replace(",", "."), "Ubicaciones disponibles")
+    kpi_card(k1, f"{total_localizadores:,}".replace(",", "."), "Localizadores", icon="🧾")
+    kpi_card(k2, f"{ocupadas:,}".replace(",", "."), "Ubicaciones ocupadas", icon="📦")
+    kpi_card(k3, f"{disponibles:,}".replace(",", "."), "Ubicaciones disponibles", icon="🟩")
     kpi_card(
         k4,
         f"{pct_ocupacion}%",
         "% Ocupación general",
         semaforo_label(pct_ocupacion),
         semaforo_color(pct_ocupacion),
+        icon="📊",
     )
     kpi_card(
         k5,
@@ -696,6 +721,7 @@ def render_almacenamiento(
         "Pasillo más saturado",
         f"{por_pasillo_pct.iloc[-1]}%",
         semaforo_color(por_pasillo_pct.iloc[-1]),
+        icon="🔥",
     )
     kpi_card(
         k6,
@@ -703,6 +729,7 @@ def render_almacenamiento(
         "Pasillo con más espacio",
         f"{por_pasillo_pct.iloc[0]}%",
         semaforo_color(por_pasillo_pct.iloc[0]),
+        icon="🧊",
     )
 
     st.caption(
