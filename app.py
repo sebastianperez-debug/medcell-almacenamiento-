@@ -224,6 +224,37 @@ CSS = f"""
         opacity:.75;
     }}
 
+    /* Tarjetas del dashboard de Stock y Caducidad */
+    .stock-card2 {{
+        background:linear-gradient(160deg, {COLOR_CARD_BG} 0%, rgba(255,255,255,0.02) 100%);
+        border:1px solid {COLOR_CARD_BORDER};
+        border-radius:14px;
+        padding:16px 18px;
+        margin-bottom:14px;
+        text-align:center;
+        box-shadow:0 2px 10px rgba(0,0,0,0.22);
+        transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }}
+    .stock-card2:hover {{
+        transform:translateY(-2px);
+        box-shadow:0 8px 20px rgba(0,0,0,0.32);
+    }}
+    .stock-card2-label {{
+        margin:0 0 10px 0;
+        color:{COLOR_TEXT_MUTED};
+        font-size:12.5px;
+        font-weight:600;
+        letter-spacing:.4px;
+        text-transform:uppercase;
+    }}
+    .stock-card2-value {{
+        display:inline-block;
+        padding:6px 20px;
+        border-radius:20px;
+        font-size:21px;
+        font-weight:800;
+    }}
+
     /* Sección títulos */
     .section-title {{
         font-size:16px;
@@ -1537,24 +1568,31 @@ def render_stock(df_stock_raw):
     )
 
     st.markdown(
-        """
+        f"""
             <style>
-            .critico-card { border-radius: 8px; padding: 14px 18px; margin-bottom: 15px;
-              border: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+            .critico-card {{
+                border-radius:14px; padding:14px 20px; margin-bottom:15px;
+                background:linear-gradient(160deg, {COLOR_CARD_BG} 0%, rgba(255,255,255,0.02) 100%);
+                border:1px solid {COLOR_CARD_BORDER};
+                display:flex; justify-content:space-between; align-items:center;
+                box-shadow:0 2px 10px rgba(0,0,0,0.22);
+            }}
             </style>
             """,
         unsafe_allow_html=True,
     )
     color_pct_critico = (
-        "#e74c3c" if pct_critico >= 15
-        else "#f1c40f" if pct_critico >= 5
-        else "#2ecc71"
+        COLOR_ROJO if pct_critico >= 15
+        else COLOR_AMARILLO if pct_critico >= 5
+        else COLOR_VERDE
     )
     st.markdown(
-        '<div class="critico-card" style="background-color: #141414;">'
-        '<span style="color:#aaaaaa; font-weight:600; text-transform:uppercase; font-size:13px;">'
+        '<div class="critico-card">'
+        f'<span style="color:{COLOR_TEXT_MUTED}; font-weight:600; text-transform:uppercase; font-size:13px;">'
         '⚠️ % de Stock Crítico (vencido + vence en &lt; 6 meses)</span>'
-        f'<span style="color:{color_pct_critico}; font-size:26px; font-weight:bold;">{pct_critico:.2f}%</span>'
+        f'<span class="stock-card2-value" style="background-color:{color_pct_critico}22;'
+        f'color:{color_pct_critico};border:1px solid {color_pct_critico}55;">'
+        f'{pct_critico:.2f}%</span>'
         "</div>",
         unsafe_allow_html=True,
     )
@@ -1581,55 +1619,60 @@ def render_stock(df_stock_raw):
       df_dash_alerta = df_dash.copy()
 
     with col_dash1:
-      st.markdown(
-          """
-              <style>
-              .stock-card { border-radius: 5px; padding: 15px; margin-bottom: 10px; text-align: center; color: white; font-weight: bold; }
-              </style>
-              """,
-          unsafe_allow_html=True,
-      )
 
-      def _borde(valor):
-        return "border: 2px solid #ffffff;" if filtro_actual == valor else ""
+      def _ring(color, valor):
+        return (
+            f"box-shadow:0 0 0 2px {color}99, 0 2px 10px rgba(0,0,0,0.22);"
+            if filtro_actual == valor
+            else "box-shadow:0 2px 10px rgba(0,0,0,0.22);"
+        )
 
-      st.markdown(
-          '<div class="stock-card" style="background-color: #333; color:'
-          f' white; {_borde("Todos")}">Unidades Registradas<br><span'
-          f' style="font-size:24px;">{formato_unidades(total_unidades)}</span></div>',
-          unsafe_allow_html=True,
+      def stock_card(label, value_text, color, filtro_valor):
+        st.markdown(
+            f'<div class="stock-card2" style="{_ring(color, filtro_valor)}">'
+            f'<p class="stock-card2-label">{label}</p>'
+            f'<span class="stock-card2-value" style="background-color:{color}22;'
+            f'color:{color};border:1px solid {color}55;">{value_text}</span>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+      stock_card(
+          "Unidades registradas",
+          formato_unidades(total_unidades),
+          COLOR_ACENTO_1,
+          "Todos",
       )
-      st.markdown(
-          '<div class="stock-card" style="background-color:'
-          f' #8b0000; {_borde("Vencido")}">Vencido<br><span'
-          f' style="font-size:24px;">{formato_unidades(total_vencido)}</span></div>',
-          unsafe_allow_html=True,
+      stock_card(
+          "Vencido",
+          formato_unidades(total_vencido),
+          "#DC2626",
+          "Vencido",
       )
-      st.markdown(
-          '<div class="stock-card" style="background-color:'
-          f' #e74c3c; {_borde("Menos de 6 meses")}">Vence en &lt; 6 meses<br><span'
-          f' style="font-size:24px;">{formato_unidades(total_menos_6m)}</span></div>',
-          unsafe_allow_html=True,
+      stock_card(
+          "Vence en < 6 meses",
+          formato_unidades(total_menos_6m),
+          COLOR_ROJO,
+          "Menos de 6 meses",
       )
-      st.markdown(
-          '<div class="stock-card" style="background-color: #f1c40f; color:'
-          f' black; {_borde("Pronto vence (6-13m)")}">Pronto vence (6 a 13'
-          ' meses)<br><span'
-          f' style="font-size:24px;">{formato_unidades(total_pronto)}</span></div>',
-          unsafe_allow_html=True,
+      stock_card(
+          "Pronto vence (6 a 13 meses)",
+          formato_unidades(total_pronto),
+          COLOR_AMARILLO,
+          "Pronto vence (6-13m)",
       )
-      st.markdown(
-          '<div class="stock-card" style="background-color:'
-          f' #2ecc71; {_borde("Vigente (> 13m)")}">Vigentes (> 13 meses)<br><span'
-          f' style="font-size:24px;">{formato_unidades(total_vigentes)}</span></div>',
-          unsafe_allow_html=True,
+      stock_card(
+          "Vigentes (> 13 meses)",
+          formato_unidades(total_vigentes),
+          COLOR_VERDE,
+          "Vigente (> 13m)",
       )
 
     with col_dash2:
       st.markdown("#### Estado de caducidad")
       labels = ["Vencido", "< 6 meses", "6 a 13 meses", "Vigente (> 13m)"]
       values = [total_vencido, total_menos_6m, total_pronto, total_vigentes]
-      colors = ["#8b0000", "#e74c3c", "#f1c40f", "#2ecc71"]
+      colors = ["#DC2626", COLOR_ROJO, COLOR_AMARILLO, COLOR_VERDE]
 
       total_donut = sum(values)
       if total_donut > 0:
@@ -1642,12 +1685,12 @@ def render_stock(df_stock_raw):
                 go.Pie(
                     labels=labels,
                     values=values,
-                    hole=0.55,
-                    marker=dict(colors=colors, line=dict(color="#0e1117", width=2)),
+                    hole=0.62,
+                    marker=dict(colors=colors, line=dict(color="#0B0E1A", width=3)),
                     text=textos_pct,
                     texttemplate="%{text}",
                     textposition="outside",
-                    textfont=dict(size=12, color="#ffffff"),
+                    textfont=dict(size=12, color=COLOR_TEXT_MUTED),
                 )
             ]
         )
@@ -1655,7 +1698,8 @@ def render_stock(df_stock_raw):
             height=380,
             margin=dict(t=20, b=60, l=60, r=60),
             paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#ffffff"),
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#F2F2F2"),
             showlegend=True,
             legend=dict(
                 orientation="h",
@@ -1663,7 +1707,21 @@ def render_stock(df_stock_raw):
                 x=0.5,
                 xanchor="center",
                 yanchor="top",
+                font=dict(color=COLOR_TEXT_MUTED, size=12),
             ),
+            annotations=[
+                dict(
+                    text=(
+                        f"<b style='font-size:26px;color:#F2F2F2;'>"
+                        f"{formato_unidades(total_donut)}</b><br>"
+                        f"<span style='font-size:11px;color:{COLOR_TEXT_MUTED};"
+                        "letter-spacing:.5px;'>TOTAL</span>"
+                    ),
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                )
+            ],
         )
         _pad_chart_izq, col_chart, _pad_chart_der = st.columns([0.3, 2, 0.3])
         with col_chart:
@@ -1685,9 +1743,11 @@ def render_stock(df_stock_raw):
         )
 
         st.markdown(
-            '<div class="stock-card" style="background-color: #7f8c8d;">Stock'
-            ' actual<br><span'
-            f' style="font-size:24px;">{formato_unidades(stock_actual)}</span></div>',
+            f'<div class="stock-card2" style="box-shadow:0 2px 10px rgba(0,0,0,0.22);">'
+            f'<p class="stock-card2-label">Stock actual</p>'
+            f'<span class="stock-card2-value" style="background-color:{COLOR_ACENTO_1}22;'
+            f'color:{COLOR_ACENTO_1};border:1px solid {COLOR_ACENTO_1}55;">'
+            f"{formato_unidades(stock_actual)}</span></div>",
             unsafe_allow_html=True,
         )
 
@@ -1698,25 +1758,23 @@ def render_stock(df_stock_raw):
                 if dias_vencer >= 0
                 else f"Venció hace {abs(dias_vencer)} días"
             )
-            color_vence = "#e74c3c"
-            color_texto = "color: white;"
+            color_vence = COLOR_ROJO
           elif prox_vencer <= limite_13m:
             texto_vence = f"Vence en {dias_vencer} días"
-            color_vence = "#f1c40f"
-            color_texto = "color: black;"
+            color_vence = COLOR_AMARILLO
           else:
             texto_vence = f"Vence en {dias_vencer} días"
-            color_vence = "#2ecc71"
-            color_texto = "color: white;"
+            color_vence = COLOR_VERDE
         else:
           texto_vence = "Sin fecha registrada"
-          color_vence = "#333333"
-          color_texto = "color: white;"
+          color_vence = COLOR_TEXT_MUTED
 
         st.markdown(
-            '<div class="stock-card" style="background-color:'
-            f" {color_vence}; {color_texto} border: 1px solid #555;\">Plazo de"
-            f' vencimiento<br><span style="font-size:20px;">{texto_vence}</span></div>',
+            f'<div class="stock-card2" style="box-shadow:0 2px 10px rgba(0,0,0,0.22);">'
+            f'<p class="stock-card2-label">Plazo de vencimiento</p>'
+            f'<span class="stock-card2-value" style="font-size:16px;'
+            f'background-color:{color_vence}22;color:{color_vence};'
+            f'border:1px solid {color_vence}55;">{texto_vence}</span></div>',
             unsafe_allow_html=True,
         )
 
