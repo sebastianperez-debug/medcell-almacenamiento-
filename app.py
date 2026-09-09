@@ -217,6 +217,12 @@ CSS = f"""
         text-transform:uppercase;
         color:{COLOR_TEXT_MUTED};
     }}
+    .brand-banner .brand-credit {{
+        margin:4px 0 0 0;
+        font-size:12px;
+        color:{COLOR_TEXT_MUTED};
+        opacity:.75;
+    }}
 
     /* Sección títulos */
     .section-title {{
@@ -2370,6 +2376,7 @@ st.markdown(
     <div class="brand-banner">
         <h1><span class="brand-white">MEDCELL</span> <span class="brand-accent">ALMACENAMIENTO</span></h1>
         <p class="brand-sub">Análisis de operación</p>
+        <p class="brand-credit">Desarrollado por Sebastián Alexis Pérez López</p>
     </div>
     """,
     unsafe_allow_html=True,
