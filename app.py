@@ -29,7 +29,7 @@ st.set_page_config(
     page_title="Informe de Almacenamiento",
     page_icon="📦",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 COLOR_OCUPADA = "#EAB308"       # amarillo dorado (ocupado, cálido)
