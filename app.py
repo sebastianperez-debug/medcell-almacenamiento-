@@ -712,6 +712,58 @@ def render_almacenamiento(
 
     st.write("")
 
+    # ---- Ocupación por tipo de bodega (tarjetas con barra semáforo) --------
+    st.markdown('<p class="section-title">Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
+
+    g = (
+        df.groupby("Bodega")
+        .agg(
+            total=("LOCALIZADOR", "count"),
+            ocupadas=("OCUPADA", "sum"),
+            disponibles=("OCUPADA", lambda s: (~s).sum()),
+        )
+        .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
+        .sort_values("pct", ascending=False)
+    )
+
+    def bodega_card(col, nombre, pct, ocupadas, disponibles):
+        color = semaforo_color(pct)
+        ancho = min(max(pct, 0), 100)
+        col.markdown(
+            f'<div class="bodega-card">'
+            f'<div class="bodega-top">'
+            f'<span class="bodega-nombre">{nombre}</span>'
+            f'<span class="bodega-pct" style="color:{color};">{pct:.0f}%</span>'
+            f'</div>'
+            f'<div class="bodega-track">'
+            f'<div class="bodega-fill" style="width:{ancho:.0f}%; background-color:{color};"></div>'
+            f'</div>'
+            f'<div class="bodega-stats">'
+            f'<div class="bodega-stat">'
+            f'<span class="valor" style="color:{COLOR_OCUPADA};">{ocupadas:,}</span>'
+            f'<span class="etiqueta">OCUPADAS</span>'
+            f'</div>'
+            f'<div class="bodega-stat">'
+            f'<span class="valor" style="color:{COLOR_DISPONIBLE};">{disponibles:,}</span>'
+            f'<span class="etiqueta">DISPONIBLES</span>'
+            f'</div>'
+            f'</div>'
+            f'</div>'.replace(",", "."),
+            unsafe_allow_html=True,
+        )
+
+    bodegas_lista = list(g.index)
+    cols_bodega = st.columns(len(bodegas_lista))
+    for col, nombre in zip(cols_bodega, bodegas_lista):
+        bodega_card(
+            col, nombre,
+            float(g.loc[nombre, "pct"]),
+            int(g.loc[nombre, "ocupadas"]),
+            int(g.loc[nombre, "disponibles"]),
+        )
+
+    st.write("")
+
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False, sheet_name="UBICACIONES_FILTRADO")
 
@@ -1059,58 +1111,6 @@ def render_almacenamiento(
     # =========================================================================
     # SECCIÓN DE LA IMAGEN 2 (AHORA ARRIBA): BODEGAS, TREEMAP Y HEATMAP
     # =========================================================================
-    st.markdown('<p class="section-title">Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
-
-    g = (
-        df.groupby("Bodega")
-        .agg(
-            total=("LOCALIZADOR", "count"),
-            ocupadas=("OCUPADA", "sum"),
-            disponibles=("OCUPADA", lambda s: (~s).sum()),
-        )
-        .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
-        .sort_values("pct", ascending=False)
-    )
-
-    def bodega_card(col, nombre, pct, ocupadas, disponibles):
-        color = semaforo_color(pct)
-        ancho = min(max(pct, 0), 100)
-        col.markdown(
-            f'<div class="bodega-card">'
-            f'<div class="bodega-top">'
-            f'<span class="bodega-nombre">{nombre}</span>'
-            f'<span class="bodega-pct" style="color:{color};">{pct:.0f}%</span>'
-            f'</div>'
-            f'<div class="bodega-track">'
-            f'<div class="bodega-fill" style="width:{ancho:.0f}%; background-color:{color};"></div>'
-            f'</div>'
-            f'<div class="bodega-stats">'
-            f'<div class="bodega-stat">'
-            f'<span class="valor" style="color:{COLOR_OCUPADA};">{ocupadas:,}</span>'
-            f'<span class="etiqueta">OCUPADAS</span>'
-            f'</div>'
-            f'<div class="bodega-stat">'
-            f'<span class="valor" style="color:{COLOR_DISPONIBLE};">{disponibles:,}</span>'
-            f'<span class="etiqueta">DISPONIBLES</span>'
-            f'</div>'
-            f'</div>'
-            f'</div>'.replace(",", "."),
-            unsafe_allow_html=True,
-        )
-
-    bodegas_lista = list(g.index)
-    cols_bodega = st.columns(len(bodegas_lista))
-    for col, nombre in zip(cols_bodega, bodegas_lista):
-        bodega_card(
-            col, nombre,
-            float(g.loc[nombre, "pct"]),
-            int(g.loc[nombre, "ocupadas"]),
-            int(g.loc[nombre, "disponibles"]),
-        )
-
-    st.write("")
-
-
     st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
     gp = (
         df.groupby("PASILLO")
