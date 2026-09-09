@@ -265,6 +265,64 @@ CSS = f"""
         color:{COLOR_TEXT_MUTED};
         letter-spacing:.2px;
     }}
+
+    /* Tarjetas de bodega con barra de capacidad (semáforo) */
+    .bodega-card {{
+        background-color:{COLOR_CARD_BG};
+        border:1px solid {COLOR_CARD_BORDER};
+        border-radius:10px;
+        padding:14px 16px 12px 16px;
+        height:100%;
+    }}
+    .bodega-card .bodega-top {{
+        display:flex;
+        justify-content:space-between;
+        align-items:baseline;
+        margin-bottom:8px;
+    }}
+    .bodega-card .bodega-nombre {{
+        font-size:13px;
+        font-weight:700;
+        color:#F2F2F2;
+        letter-spacing:.2px;
+    }}
+    .bodega-card .bodega-pct {{
+        font-size:18px;
+        font-weight:800;
+    }}
+    .bodega-card .bodega-track {{
+        width:100%;
+        height:8px;
+        border-radius:6px;
+        background-color:rgba(148,163,184,.15);
+        overflow:hidden;
+        margin-bottom:10px;
+    }}
+    .bodega-card .bodega-fill {{
+        height:100%;
+        border-radius:6px;
+    }}
+    .bodega-card .bodega-stats {{
+        display:flex;
+        justify-content:space-between;
+    }}
+    .bodega-card .bodega-stat {{
+        text-align:left;
+    }}
+    .bodega-card .bodega-stat:last-child {{
+        text-align:right;
+    }}
+    .bodega-card .bodega-stat .valor {{
+        font-size:15px;
+        font-weight:700;
+        color:#F2F2F2;
+        display:block;
+    }}
+    .bodega-card .bodega-stat .etiqueta {{
+        font-size:10px;
+        color:{COLOR_TEXT_MUTED};
+        letter-spacing:.2px;
+    }}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -1001,73 +1059,56 @@ def render_almacenamiento(
     # =========================================================================
     # SECCIÓN DE LA IMAGEN 2 (AHORA ARRIBA): BODEGAS, TREEMAP Y HEATMAP
     # =========================================================================
-    c1, c2 = st.columns(2)
+    st.markdown('<p class="section-title">Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
 
-    with c1:
-        st.markdown('<p class="section-title">% Ocupación por tipo de bodega</p>', unsafe_allow_html=True)
-        g = (
-            df.groupby("Bodega")
-            .agg(total=("LOCALIZADOR", "count"), ocupadas=("OCUPADA", "sum"))
-            .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
-            .sort_values("pct")
+    g = (
+        df.groupby("Bodega")
+        .agg(
+            total=("LOCALIZADOR", "count"),
+            ocupadas=("OCUPADA", "sum"),
+            disponibles=("OCUPADA", lambda s: (~s).sum()),
         )
-        colores_bodega = sample_colorscale(
-            [[0.0, COLOR_VERDE], [0.5, COLOR_AMARILLO], [1.0, COLOR_ROJO]],
-            [min(max(v / 100, 0), 1) for v in g["pct"]],
-        )
-        fig_pct = go.Figure(
-            go.Bar(
-                x=g["pct"], y=g.index, orientation="h",
-                marker=dict(
-                    color=colores_bodega, line=dict(width=0),
-                    opacity=0.92,
-                ),
-                text=[f"{v:.0f}%" for v in g["pct"]], textposition="outside",
-                textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY, size=13),
-                hovertemplate="%{y}: %{x:.0f}%<extra></extra>",
-            )
-        )
-        fig_pct.update_layout(
-            **BASE_LAYOUT,
-            height=280, bargap=0.5,
-            margin=dict(l=10, r=40, t=10, b=10),
-            xaxis=dict(visible=False, range=[0, max(g["pct"].max() * 1.15, 10)]),
-            yaxis=dict(showgrid=False, tickfont=dict(size=12)),
-        )
-        st.plotly_chart(fig_pct, use_container_width=True)
+        .assign(pct=lambda d: (d["ocupadas"] / d["total"] * 100).round(0))
+        .sort_values("pct", ascending=False)
+    )
 
-    with c2:
-        st.markdown('<p class="section-title">Ocupadas vs. disponibles por bodega</p>', unsafe_allow_html=True)
-        g2 = (
-            df.groupby("Bodega")
-            .agg(ocupadas=("OCUPADA", "sum"), disponibles=("OCUPADA", lambda s: (~s).sum()))
-            .sort_values("ocupadas")
+    def bodega_card(col, nombre, pct, ocupadas, disponibles):
+        color = semaforo_color(pct)
+        ancho = min(max(pct, 0), 100)
+        col.markdown(
+            f'<div class="bodega-card">'
+            f'<div class="bodega-top">'
+            f'<span class="bodega-nombre">{nombre}</span>'
+            f'<span class="bodega-pct" style="color:{color};">{pct:.0f}%</span>'
+            f'</div>'
+            f'<div class="bodega-track">'
+            f'<div class="bodega-fill" style="width:{ancho:.0f}%; background-color:{color};"></div>'
+            f'</div>'
+            f'<div class="bodega-stats">'
+            f'<div class="bodega-stat">'
+            f'<span class="valor" style="color:{COLOR_OCUPADA};">{ocupadas:,}</span>'
+            f'<span class="etiqueta">OCUPADAS</span>'
+            f'</div>'
+            f'<div class="bodega-stat">'
+            f'<span class="valor" style="color:{COLOR_DISPONIBLE};">{disponibles:,}</span>'
+            f'<span class="etiqueta">DISPONIBLES</span>'
+            f'</div>'
+            f'</div>'
+            f'</div>'.replace(",", "."),
+            unsafe_allow_html=True,
         )
-        fig_bd = go.Figure()
-        fig_bd.add_trace(
-            go.Bar(x=g2["ocupadas"], y=g2.index, orientation="h",
-                   name="Ocupadas", marker=dict(color=COLOR_OCUPADA, line=dict(width=0)),
-                   text=g2["ocupadas"], textposition="outside",
-                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
-                   hovertemplate="%{y} — Ocupadas: %{x:,.0f}<extra></extra>")
+
+    bodegas_lista = list(g.index)
+    cols_bodega = st.columns(len(bodegas_lista))
+    for col, nombre in zip(cols_bodega, bodegas_lista):
+        bodega_card(
+            col, nombre,
+            float(g.loc[nombre, "pct"]),
+            int(g.loc[nombre, "ocupadas"]),
+            int(g.loc[nombre, "disponibles"]),
         )
-        fig_bd.add_trace(
-            go.Bar(x=g2["disponibles"], y=g2.index, orientation="h",
-                   name="Disponibles", marker=dict(color=COLOR_DISPONIBLE, line=dict(width=0)),
-                   text=g2["disponibles"], textposition="outside",
-                   textfont=dict(color="#E2E8F0", family=PLOTLY_FONT_FAMILY),
-                   hovertemplate="%{y} — Disponibles: %{x:,.0f}<extra></extra>")
-        )
-        fig_bd.update_layout(
-            **BASE_LAYOUT,
-            barmode="group", height=280, bargap=0.3, bargroupgap=0.12,
-            margin=dict(l=10, r=10, t=10, b=10),
-            xaxis=dict(visible=False),
-            yaxis=dict(showgrid=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
-                         bgcolor="rgba(0,0,0,0)"),
-        )
-        st.plotly_chart(fig_bd, use_container_width=True)
+
+    st.write("")
 
 
     st.markdown('<p class="section-title">Ocupadas y disponibles por pasillo</p>', unsafe_allow_html=True)
