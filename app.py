@@ -10,6 +10,7 @@ ALMACENAMIENTO, OBSERVACIONES, Bodega, VACIAS, STOCK, Par
 """
 
 import io
+import os
 from datetime import date
 
 import pandas as pd
@@ -261,8 +262,23 @@ def semaforo_label(pct: float) -> str:
 # ----------------------------------------------------------------------
 # Carga de datos
 # ----------------------------------------------------------------------
+def _cache_bust_key(file) -> str:
+    """Genera una 'llave' que cambia si el archivo cambia, para invalidar
+    el caché de Streamlit automáticamente (aunque la ruta/nombre sea igual).
+    """
+    if isinstance(file, str):
+        try:
+            stat = os.stat(file)
+            return f"{file}:{stat.st_mtime_ns}:{stat.st_size}"
+        except OSError:
+            return file
+    # Archivo subido por file_uploader (UploadedFile): su tamaño y nombre
+    # ya identifican su contenido de forma única para este propósito.
+    return f"{getattr(file, 'name', '')}:{getattr(file, 'size', '')}"
+
+
 @st.cache_data(show_spinner="Cargando datos...")
-def load_data(file) -> pd.DataFrame:
+def load_data(file, _bust: str) -> pd.DataFrame:
     df = pd.read_excel(file, sheet_name="UBICACIONES")
     df["NIVEL"] = df["NIVEL"].astype(str)
     df["PASILLO"] = df["PASILLO"].astype(str)
@@ -277,7 +293,7 @@ def load_data(file) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner="Cargando datos de stock...")
-def load_stock_data(file) -> pd.DataFrame:
+def load_stock_data(file, _bust: str) -> pd.DataFrame:
     posibles_nombres = ["STOCK EN POSICION", "STOCK"]
     xls = pd.ExcelFile(file)
     nombre_encontrado = next(
@@ -417,20 +433,24 @@ with st.sidebar:
         "Si no subes nada, se usa el archivo incluido en el repositorio "
         f"(`{DATA_PATH}`). Debe tener las hojas **UBICACIONES** y **STOCK**."
     )
+    if uploaded is None and os.path.exists(DATA_PATH):
+        _mtime = date.fromtimestamp(os.path.getmtime(DATA_PATH))
+        st.caption(f"🕒 Última modificación del archivo: **{_mtime.strftime('%d-%m-%Y')}**")
 
 _fuente = uploaded if uploaded is not None else DATA_PATH
+_bust = _cache_bust_key(_fuente)
 
 df_raw = None
 error_ubicaciones = None
 try:
-    df_raw = load_data(_fuente)
+    df_raw = load_data(_fuente, _bust)
 except Exception as e:
     error_ubicaciones = str(e)
 
 df_stock_raw = None
 error_stock = None
 try:
-    df_stock_raw = load_stock_data(_fuente)
+    df_stock_raw = load_stock_data(_fuente, _bust)
 except Exception as e:
     error_stock = str(e)
 
