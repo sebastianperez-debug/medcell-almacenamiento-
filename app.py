@@ -2375,7 +2375,6 @@ st.markdown(
     """
     <div class="brand-banner">
         <h1><span class="brand-white">MEDCELL</span> <span class="brand-accent">ALMACENAMIENTO</span></h1>
-        <p class="brand-sub">Análisis de operación</p>
         <p class="brand-credit">Desarrollado por Sebastián Alexis Pérez López</p>
     </div>
     """,
