@@ -150,6 +150,8 @@ CSS = f"""
         align-items:center;
         justify-content:center;
         gap:6px;
+        min-height:32px;
+        line-height:1.3;
     }}
     .metric-card p .kpi-icon {{
         font-size:14px;
@@ -692,16 +694,19 @@ def render_almacenamiento(
     )
 
     def kpi_card(col, value, label, badge_text=None, badge_color=None, icon=None):
-        badge_html = ""
         if badge_text:
             badge_html = (
                 f'<span class="badge" style="background-color:{badge_color}22;'
                 f'color:{badge_color};border:1px solid {badge_color}55;">{badge_text}</span>'
             )
+        else:
+            # Placeholder invisible: reserva el mismo espacio que un badge real
+            # para que todas las tarjetas midan lo mismo, tengan o no badge.
+            badge_html = '<span class="badge" style="visibility:hidden;">.</span>'
         icon_html = f'<span class="kpi-icon">{icon}</span>' if icon else ""
         col.markdown(
             f'<div class="metric-card"><h1>{value}</h1>'
-            f"<p>{icon_html}{label}</p>{badge_html}</div>",
+            f'<p class="kpi-label">{icon_html}{label}</p>{badge_html}</div>',
             unsafe_allow_html=True,
         )
 
