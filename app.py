@@ -1326,68 +1326,11 @@ def render_almacenamiento(
     )
 
 
-# --------------------------------------------------------------------------
-# Adaptador para la hoja "BBD STOCK" del Refresh (despacho) -> mismas
-# columnas canonicas que espera render_stock(), para reutilizar el mismo
-# dashboard de Stock y Caducidad con esta otra fuente de datos.
-# --------------------------------------------------------------------------
-
-_RENOMBRES_BBD_STOCK = {
-    "Código": "codigo_articulo",
-    "Codigo SB": "codigo_sb",
-    "Código PU": "codigo_pu",
-    "Descripción": "descripcion",
-    "Lote Proveedor": "lote_proveedor",
-    "Fecha vence": "fecha_expiracion",
-    "Estado": "estado_lote",
-    "Localizador": "localizador",
-    "Cantidad": "cantidad",
-}
-
-
-@st.cache_data(show_spinner="Leyendo pestaña BBD STOCK...")
-def cargar_bbd_stock(archivo) -> pd.DataFrame:
-    """Lee la pestaña 'BBD STOCK' del Refresh y renombra sus columnas para
-    que calcen con lo que espera render_stock() (misma logica y estilo que
-    la pestaña Stock y Caducidad, pero con esta otra fuente)."""
-    df = pd.read_excel(archivo, sheet_name="BBD STOCK")
-    df.columns = [str(c).strip() for c in df.columns]
-    rename_map = {c: _RENOMBRES_BBD_STOCK[c] for c in df.columns if c in _RENOMBRES_BBD_STOCK}
-    return df.rename(columns=rename_map)
-
-
-def render_stock_bbd():
-    """Pestaña nueva: mismo panel de Stock y Caducidad, pero alimentado por
-    la pestaña 'BBD STOCK' del Refresh (archivo del despacho, distinto al
-    Excel de Almacenamiento)."""
-    st.markdown("#### 📂 Fuente de datos — Refresh (despacho)")
-    st.caption(
-        "Esta pestaña usa la hoja **BBD STOCK** del Refresh (el mismo archivo que usa "
-        "Medcell Despacho), no el Excel de Almacenamiento."
-    )
-    archivo_refresh = st.file_uploader(
-        "Sube el Refresh (Excel)", type=["xlsx"], key="uploader_refresh_bbd"
-    )
-    if archivo_refresh is None:
-        st.info("Sube el Refresh para ver el Stock y Caducidad de BBD STOCK.")
-        return
-
-    try:
-        df_bbd = cargar_bbd_stock(archivo_refresh)
-    except Exception as e:
-        st.error(f"No pude leer la pestaña 'BBD STOCK' de ese archivo: {e}")
-        return
-
-    render_stock(df_bbd, key_ns="bbd", titulo="🧬 Dashboard de Stock y Caducidad (BBD STOCK)")
-
-
-def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashboard de Fecha de Caducidad"):
-    """Renderiza el dashboard de Stock / Fecha de Caducidad (pestaña 2).
-    key_ns permite reutilizar esta misma funcion en mas de una pestaña
-    (ej: STOCK y BBD STOCK) sin que sus widgets choquen entre si."""
+def render_stock(df_stock_raw):
+    """Renderiza el dashboard de Stock / Fecha de Caducidad (pestaña 2)."""
     df = df_stock_raw.copy()
 
-    st.markdown(f"### {titulo}")
+    st.markdown("### 📦 Dashboard de Fecha de Caducidad")
 
     col_cod = next(
         (
@@ -1516,9 +1459,9 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
 
     col_dash1, col_dash2 = st.columns([1, 2.3])
 
-    key_codigo = f"sel_codigo_{key_ns}"
-    key_sku_sb = f"sel_sku_sb_{key_ns}"
-    key_sku_pu = f"sel_sku_pu_{key_ns}"
+    key_codigo = f"sel_codigo_stock"
+    key_sku_sb = f"sel_sku_sb_stock"
+    key_sku_pu = f"sel_sku_pu_stock"
 
     def _limpiar_otros_filtros(keys_a_limpiar):
       for k in keys_a_limpiar:
@@ -1663,7 +1606,7 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
         "Pronto vence (6-13m)": "Pronto vence (6-13m)",
         "Vigente (> 13m)": "Vigente (> 13m)",
     }
-    key_alerta = f"radio_alerta_{key_ns}"
+    key_alerta = f"radio_alerta_stock"
     etiqueta_sel = st.radio(
         "🔍 Filtrar por categoría de caducidad:",
         list(label_map_alerta.keys()),
@@ -1785,7 +1728,7 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
         _pad_chart_izq, col_chart, _pad_chart_der = st.columns([0.3, 2, 0.3])
         with col_chart:
           st.plotly_chart(
-              fig_pie, use_container_width=True, key=f"pie_{key_ns}"
+              fig_pie, use_container_width=True, key="pie_stock"
           )
       else:
         st.info("Sin registros para mostrar.")
@@ -1871,7 +1814,7 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
       st.divider()
 
     # Filtro adicional por "Lote Proveedor", propio de la tabla de detalle.
-    key_lote = f"sel_lote_proveedor_{key_ns}"
+    key_lote = "sel_lote_proveedor_stock"
     if col_lote and col_lote in df_dash_alerta.columns:
       lista_lotes = sorted(
           [
@@ -2106,7 +2049,7 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
               "application/vnd.openxmlformats-officedocument"
               ".spreadsheetml.sheet"
           ),
-          key=f"btn_descarga_{key_ns}",
+          key="btn_descarga_stock",
           use_container_width=True,
       )
 
@@ -2184,7 +2127,7 @@ def render_stock(df_stock_raw, key_ns: str = "stock", titulo: str = "📦 Dashbo
             yaxis_title="",
         )
         st.plotly_chart(
-            fig_loc, use_container_width=True, key=f"top_loc_{key_ns}"
+            fig_loc, use_container_width=True, key="top_loc_stock"
         )
 
         rename_cols = {col_loc: "Localizador"}
@@ -2686,8 +2629,8 @@ st.markdown(
 # ----------------------------------------------------------------------
 # Pestañas
 # ----------------------------------------------------------------------
-tab_almacen, tab_stock, tab_escanear, tab_bbd = st.tabs(
-    ["📦 Almacenamiento", "🗓️ Stock y Caducidad", "📷 Escanear", "🧬 Stock BBD (Despacho)"]
+tab_almacen, tab_stock, tab_escanear = st.tabs(
+    ["📦 Almacenamiento", "🗓️ Stock y Caducidad", "📷 Escanear"]
 )
 
 with tab_almacen:
@@ -2721,6 +2664,3 @@ with tab_escanear:
         if df_raw is not None:
             hojas_disponibles["UBICACIONES"] = df_raw
         render_escanear(df_stock_raw, hojas_disponibles)
-
-with tab_bbd:
-    render_stock_bbd()
