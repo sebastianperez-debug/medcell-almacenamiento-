@@ -1326,9 +1326,40 @@ def render_almacenamiento(
     )
 
 
-def render_stock(df_stock_raw):
+def render_stock(df_stock_raw, df_ubicaciones=None):
     """Renderiza el dashboard de Stock / Fecha de Caducidad (pestaña 2)."""
     df = df_stock_raw.copy()
+
+    # Mapa Localizador -> Sub Inventario, tomado de la hoja UBICACIONES.
+    # Se usa para reemplazar la columna "Estado Sub-Inv" (estado de calidad)
+    # por el sub-inventario físico de la ubicación, igual que en la pestaña
+    # de Almacenamiento.
+    mapa_sub_inventario = {}
+    if df_ubicaciones is not None and not df_ubicaciones.empty:
+      col_loc_ubic = next(
+          (
+              c
+              for c in df_ubicaciones.columns
+              if c.strip().lower() in ["localizador", "ubicacion"]
+          ),
+          None,
+      )
+      col_sub_inv_ubic = next(
+          (
+              c
+              for c in df_ubicaciones.columns
+              if c.strip().lower().replace("_", " ")
+              in ["sub inventario", "sub inventory"]
+          ),
+          None,
+      )
+      if col_loc_ubic and col_sub_inv_ubic:
+        mapa_sub_inventario = (
+            df_ubicaciones.dropna(subset=[col_loc_ubic])
+            .drop_duplicates(subset=[col_loc_ubic])
+            .set_index(col_loc_ubic)[col_sub_inv_ubic]
+            .to_dict()
+        )
 
     st.markdown("### 📦 Dashboard de Fecha de Caducidad")
 
@@ -1884,7 +1915,12 @@ def render_stock(df_stock_raw):
     if col_sku_pu and col_sku_pu in df_dash_alerta.columns:
       cols_mostrar.append(col_sku_pu)
       nombres_amigables[col_sku_pu] = "SKU PU"
-    if col_estado_sub:
+    if col_loc and mapa_sub_inventario:
+      df_dash_alerta["Sub Inventario"] = df_dash_alerta[col_loc].map(
+          mapa_sub_inventario
+      )
+      cols_mostrar.append("Sub Inventario")
+    elif col_estado_sub:
       cols_mostrar.append(col_estado_sub)
       nombres_amigables[col_estado_sub] = "Estado Sub-Inv"
     if col_estado_lote:
@@ -2650,7 +2686,7 @@ with tab_stock:
             f"No pude cargar la hoja `STOCK` del Excel: {error_stock}"
         )
     else:
-        render_stock(df_stock_raw)
+        render_stock(df_stock_raw, df_raw)
 
 with tab_escanear:
     if df_stock_raw is None:
